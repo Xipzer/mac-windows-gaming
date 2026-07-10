@@ -1,0 +1,21 @@
+name: shellcheck
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: '.'
+          severity: warning
+        env:
+          # SC1091: can't follow sourced files at lint time (lib.sh resolved at runtime)
+          # SC2034: lib.sh constants are consumed by scripts that source it (cross-file)
+          # SC2155: intentional declare-and-assign in a few spots
+          SHELLCHECK_OPTS: -e SC1091 -e SC2155 -e SC2034
