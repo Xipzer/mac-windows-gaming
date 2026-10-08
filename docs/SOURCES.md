@@ -13,8 +13,8 @@
 | D3DMetal (Apple GPTk) | 4.0 beta 2 | — | bundled in template 1.0.21 |
 | DXMT | v0.80 release (23 Apr 2026); dev builds past it | — | v0.81 / v1.0 not released yet |
 | Gcenx macOS Wine builds | 11.18 | 25 Sep 2026 | standalone; not used directly here |
-| CrossOver | 26.3.0 stable; Preview 20261006 | 21 Jul / 6 Oct 2026 | paid; only needed for the EA App or NotProton |
-| NotProton | 1.0.3 | 6 Oct 2026 | needs paid CrossOver; see NOTPROTON.md |
+| CrossOver | 26.3.0 stable; Preview 20261006 | 21 Jul / 6 Oct 2026 | paid; only needed for the EA App (upstream NotProton) |
+| NotProton | 1.0.3 upstream (CrossOver-only); free fork Maxyme `5b8d186` + our patch | 6 Oct 2026 | default Steam route here; see NOTPROTON.md |
 
 ### Rosetta 2 warning
 
@@ -34,6 +34,8 @@ ARM64 builds, but D3DMetal isn't available on them yet.
 - DXMT — https://github.com/3Shain/dxmt
 - Apple Game Porting Toolkit — https://developer.apple.com/games/game-porting-toolkit/
 - NotProton — https://github.com/NotProtonNot/NotProton
+- Free NotProton fork (standalone-steam-gptk4) — https://github.com/Maxyme/NotProton/tree/standalone-steam-gptk4
+- Dobby (hook library) — https://github.com/jmpews/Dobby
 
 ## Compatibility databases
 

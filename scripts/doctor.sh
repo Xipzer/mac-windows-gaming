@@ -33,27 +33,36 @@ else
   warn "  no engines dir yet (open Sikarugir once)"
 fi
 
-info "Steam wrapper"
-w="$(find_wrapper Steam || true)"
-if [[ -n "${w:-}" ]]; then
-  ok "found: $w"
-  tv="$(wrapper_template_version "$w")"; lt="$(latest_template_version 2>/dev/null || true)"
-  log "  Template: ${tv:-?}$( [[ -n "$lt" ]] && version_gt "$lt" "${tv:-0}" && printf '  (newer available: %s -> scripts/update-wrapper.sh)' "$lt")"
-  [[ -f "$(wrapper_wine_dir "$w")/version" ]] && log "  Engine:   $(cat "$(wrapper_wine_dir "$w")/version")"
-  [[ -f "$(wrapper_dxmt_dir "$w")/version" ]]  && log "  DXMT:     $(cat "$(wrapper_dxmt_dir "$w")/version")"
-  ext="$(wrapper_d3dmetal_external "$w")"
-  [[ -x "${ext}/D3DMetal.framework/Versions/A/D3DMetal" ]] && \
-    log "  D3DMetal: $(d3dmetal_version "$ext")"
-  sd="$(wrapper_steamdir "$w")"
-  if [[ -d "${sd}/steamapps/common" ]]; then
+info "Native Steam + free NotProton (default route)"
+AS="${HOME}/Library/Application Support"
+if [[ -d /Applications/Steam.app ]]; then
+  ok "Steam.app present"
+  if /usr/libexec/PlistBuddy -c "Print :LSEnvironment:DYLD_INSERT_LIBRARIES" /Applications/Steam.app/Contents/Info.plist 2>/dev/null | grep -q notproton; then
+    ok "NotProton injected"
+  else
+    warn "NotProton not injected -> scripts/setup-notproton.sh"
+  fi
+  r="${AS}/notproton/runners/current"
+  [[ -x "$r/bin/wine" ]] && ok "runner: $(readlink "$r") ($("$r/bin/wine" --version 2>/dev/null))" || warn "no runner -> scripts/setup-notproton.sh"
+  [[ -x "${AS}/Steam/compatibilitytools.d/notproton/run" ]] && ok "compat tool installed" || warn "compat tool missing"
+  b="$(grep -m1 -oE '[0-9]{9,}' "${AS}/Steam/Steam.AppBundle/Steam/Contents/MacOS/steam_osx.manifest" 2>/dev/null || true)"
+  [[ -n "$b" ]] && log "  Steam client build: $b"
+  log "  Steam signatures known: $(find "${AS}/notproton/signatures/macos.arm64" -name '*.json' 2>/dev/null | wc -l | tr -d ' ')"
+  if [[ -d "${AS}/Steam/steamapps/common" ]]; then
     log "  Games:"
-    du -sh "${sd}/steamapps/common"/* 2>/dev/null | sort -rh | sed 's/^/    /' | head -20
+    du -sh "${AS}/Steam/steamapps/common"/* 2>/dev/null | sort -rh | sed 's/^/    /' | head -20
   fi
 else
-  warn "no Steam wrapper yet — run scripts/setup-steam.sh"
+  warn "Steam for macOS not installed -> ./install.sh"
 fi
 
-info "Native macOS Steam client (separate from the wrapper)"
-[[ -d "/Applications/Steam.app" || -d "${HOME}/Applications/Steam.app" ]] \
-  && ok "native Steam.app present (use for games with native Mac ports)" \
-  || log "  not installed (optional; for native ports like Valheim/Tomb Raider)"
+info "Legacy Steam wrapper (optional)"
+w="$(find_wrapper Steam || true)"
+if [[ -n "${w:-}" ]]; then
+  ok "found: $w  (don't run it alongside Mac Steam)"
+  tv="$(wrapper_template_version "$w")"
+  log "  Template: ${tv:-?}"
+  [[ -f "$(wrapper_wine_dir "$w")/version" ]] && log "  Engine:   $(cat "$(wrapper_wine_dir "$w")/version")"
+else
+  log "  none (not needed for the NotProton route)"
+fi

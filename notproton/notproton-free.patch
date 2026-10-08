@@ -1,0 +1,72 @@
+diff --git a/dylib/feats/compat_run.sh b/dylib/feats/compat_run.sh
+index 4e6bb9c..c42834d 100755
+--- a/dylib/feats/compat_run.sh
++++ b/dylib/feats/compat_run.sh
+@@ -48,7 +48,7 @@ export D3DM_MTL4="${D3DM_MTL4:-1}"
+ export D3DM_ENABLE_METALFX="${D3DM_ENABLE_METALFX:-1}"
+ export D3DM_SUPPORT_DXR="${D3DM_SUPPORT_DXR:-1}"
+ export ROSETTA_ADVERTISE_AVX="${ROSETTA_ADVERTISE_AVX:-1}"
+-export WINEMSYNC="${WINEMSYNC:-1}"
++export WINEMSYNC="${WINEMSYNC:-0}"
+ export WINEESYNC="${WINEESYNC:-1}"
+ 
+ wine_unix="$CX_ROOT/lib/wine/aarch64-unix"
+@@ -79,6 +79,9 @@ fi
+ export WINELOADER WINESERVER
+ export WINEDLLPATH="$CX_ROOT/lib/wine/x86_64-windows:$wine_unix"
+ export PATH="$CX_ROOT/bin:$PATH"
++export DYLD_FALLBACK_LIBRARY_PATH="$CX_ROOT/lib/deps:$CX_ROOT/lib/external:${DYLD_FALLBACK_LIBRARY_PATH:-/usr/lib}"
++# Free-Wine runners (e.g. Sikarugir Wine 11) ship their own environment
++[ -f "$CX_ROOT/runner.env" ] && . "$CX_ROOT/runner.env"
+ 
+ if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
+   log="$STEAM_COMPAT_DATA_PATH/notproton-run.log"
+@@ -346,7 +349,10 @@ if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
+   "$WINELOADER" reg add 'HKLM\Software\Wow6432Node\Microsoft\Windows NT\CurrentVersion\AeDebug' /v Auto /t REG_SZ /d 0 /f >> "$log" 2>&1 || true
+   "$WINELOADER" reg add 'HKCU\Software\Wine\WineDbg' /v ShowCrashDialog /t REG_DWORD /d 0 /f >> "$log" 2>&1 || true
+ 
+-  echo "video: RetinaMode=${NOTPROTON_RETINA:-0}" >> "$log" 2>&1 || true
++  # Retina on by default so games see real pixels (e.g. 3024x1964) instead of the scaled
++  # "looks like" size; pass NOTPROTON_RETINA=0 after %command% to opt a game out.
++  NOTPROTON_RETINA="${NOTPROTON_RETINA:-1}"
++  echo "video: RetinaMode=$NOTPROTON_RETINA" >> "$log" 2>&1 || true
+   if [ "$NOTPROTON_RETINA" = "1" ]; then
+     "$WINELOADER" reg add 'HKCU\Software\Wine\Mac Driver' /v RetinaMode /t REG_SZ /d y /f >> "$log" 2>&1 || true
+   else
+@@ -400,9 +406,7 @@ install_lsteamclient_trigger() {
+     if ! cmp -s "$src64" "$dst64"; then
+       cp -f "$src64" "$dst64" && echo "=== installed system32 lsteamclient trigger ===" >> "$log" 2>&1 || true
+     fi
+-    if ! cmp -s "$src64" "$dst64_sc"; then
+-      cp -f "$src64" "$dst64_sc" && echo "=== installed system32 steamclient64 trigger ===" >> "$log" 2>&1 || true
+-    fi
++    rm -f "$dst64_sc"
+   fi
+ }
+ 
+@@ -691,6 +695,8 @@ fi
+ cat > "$loader_macos/launcher" <<LAUNCHER
+ #!/bin/sh
+ export WINELOADER="$WINELOADER"
++# SIP strips DYLD_* when exec-ing /bin/sh, so bake the runner lib path in here
++export DYLD_FALLBACK_LIBRARY_PATH="$DYLD_FALLBACK_LIBRARY_PATH"
+ wine_log="$loader_root/notproton-wine.log"
+ exec > "\$wine_log" 2>&1
+ shim="$HOME/Library/Application Support/notproton/overlay-shim.dylib"
+@@ -813,7 +819,7 @@ fi
+ 
+ 
+ set -- --args "$shim_exe" "$@"
+-for name in $(env | sed -nE 's/^(Steam[A-Za-z0-9]*|(CX_GRAPHICS|D3DM_|DXMT_|DXVK_|MTL_|ROSETTA_)[A-Z0-9_]*)=.*/\1/p'); do
++for name in $(env | sed -nE 's/^(Steam[A-Za-z0-9]*|SikarugirApp[A-Za-z0-9]*|GST_PLUGIN_PATH|VK_DRIVER_FILES|WINEBOOT_HIDE_DIALOG|WINEESYNC|(CX_GRAPHICS|CX_D3DMETAL|CX_APPLEGPT|CX_FWD|WINEDLLPATH_|D3DM_|DXMT_|DXVK_|MVK_|MTL_|ROSETTA_)[A-Z0-9_]*)=.*/\1/p'); do
+   eval "value=\$$name"
+   # shellcheck disable=SC2154 # eval assigns value on the line above
+   set -- --env "$name=$value" "$@"
+@@ -827,6 +833,7 @@ set -- \
+   --env WINEMSYNC="$WINEMSYNC" \
+   --env WINEPREFIX="$WINEPREFIX" \
+   --env WINEDEBUG="$WINEDEBUG" \
++  --env DYLD_FALLBACK_LIBRARY_PATH="$DYLD_FALLBACK_LIBRARY_PATH" \
+   --env PATH="$PATH" \
+   --env STEAM_COMPAT_DATA_PATH="$STEAM_COMPAT_DATA_PATH" \
+   --env STEAM_COMPAT_INSTALL_PATH="$STEAM_COMPAT_INSTALL_PATH" \

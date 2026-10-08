@@ -117,3 +117,18 @@ Every destructive helper makes a timestamped backup next to what it changed
 rm -rf "<wrapper>/Contents/SharedSupport/wine"
 mv "<wrapper>/Contents/SharedSupport/wine.backup-<ts>" "<wrapper>/Contents/SharedSupport/wine"
 ```
+
+## NotProton route (native Steam)
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Games stop launching after a Steam client update | dylib signatures don't match the new Steam build | `scripts/setup-notproton.sh --skip-build`; consider Steam → Settings → block client updates |
+| `Application load error 3:0000065432` | Steam DRM found lsteamclient in place of Valve's `steamclient64.dll` | Re-run `setup-notproton.sh` (restores Valve's DLL + ntdll detour). Delete the game's `pfx/drive_c/windows/system32/steamclient64.dll` if it persists |
+| Game's own dialog is a blank box, log says `Wine cannot find the FreeType font library` | SIP strips `DYLD_*` from the `/bin/sh` launcher, so Wine loses the runner's libraries | Fixed in the patch (path baked into the launcher). Re-run `setup-notproton.sh` |
+| Every game capped at 1800×1169 (your "looks like" size) | Wine Retina mode off | On by default now; per game `%command% NOTPROTON_RETINA=1` |
+| `Failed to spawn process` / `OS Error 260` | Launch option written as `VAR=1 %command%` | Write `%command% VAR=1` |
+| Unreal game hangs at 0% CPU after start | msync | Default is `WINEMSYNC=0`; don't force it on |
+| UE launcher stub spins at 200% CPU (Dragon Ball) | launcher exe never hands off | Launch option `"…/notproton/direct-shipping.sh" %command%` |
+| "Known issues with graphics driver" box (UE) | GPU isn't NVIDIA/AMD | Click OK; don't press Enter on "Yes" (opens NVIDIA's site) |
+| Launch seems stuck, nothing on screen | Steam EULA / Play dialog hidden behind windows | Bring Steam to front and click it |
+| Mac Steam and the old wrapper Steam both running, high CPU | a `steam://` URL launched the wrapper | Quit the wrapper; use `open -b com.valvesoftware.steam "steam://…"` |

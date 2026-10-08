@@ -19,15 +19,27 @@ and invariants learned from a real end-to-end session.
    works. Tell the user; do not burn time trying to fix it.
 5. **Kernel anti-cheat = won't run.** VAC-heavy titles (CS2), EAC, BattlEye. Don't try.
 
-## Standard workflow
+## Standard workflow (default: native Steam + free NotProton)
 
 ```
-1. gather state   -> bash scripts/doctor.sh          (read-only; parse output)
-2. prerequisites  -> install.sh handles Rosetta/brew/casks (idempotent)
-3. D3DMetal       -> optional: bash scripts/fetch-d3dmetal.sh (templates already bundle it)
-4. Steam wrapper  -> bash scripts/setup-steam.sh     (may require 1 GUI step, then re-run)
-5. per game       -> bash scripts/check-compat.sh <appid>   BEFORE installing
+1. gather state   -> bash scripts/doctor.sh                 (read-only)
+2. install        -> ./install.sh                           (prereqs, Steam, Heroic, then step 3)
+3. Steam stack    -> bash scripts/setup-notproton.sh        (idempotent; quits Steam first)
+4. per game       -> bash scripts/check-compat.sh <appid>   BEFORE installing
+5. Steam updated, games won't launch -> bash scripts/setup-notproton.sh --skip-build
 ```
+
+Invariants for the NotProton route:
+- **Steam must be quit** before editing `config.vdf` / `localconfig.vdf`; Steam rewrites them on exit.
+- **Launch options go after `%command%`** (`%command% NOTPROTON_RETINA=0`). `VAR=1 %command%`
+  fails on macOS Steam with `OS Error 260`.
+- **Never replace `bridge/steamclient64.dll` with lsteamclient.** Steam DRM needs Valve's file;
+  the ntdll detour does the rerouting. `.valve` copies sit beside them.
+- **Don't run the old wrapper Steam alongside Mac Steam.** Launch games with
+  `open -b com.valvesoftware.steam "steam://rungameid/<id>"` so the URL can't reach the wrapper.
+- Steam's EULA / "Play" interstitial dialogs can be invisible to screenshots; ask the user to click.
+- Logs: `steamapps/compatdata/<appid>/notproton-run.log`, `notproton/launchers/<appid>/notproton-wine.log`,
+  `notproton/notproton.log`.
 
 ## Decision tree for "will this game work?"
 
@@ -46,7 +58,7 @@ online-only? ──> warn: online often broken under Wine even if game runs
 
 `scripts/check-compat.sh <appid>` returns: exit 0 works, 2 caveats, 3 blocked, 1 unknown.
 
-## The Steam wrapper fixes (apply in this order; setup-steam.sh does it)
+## Legacy: Steam wrapper fixes (only for `install.sh --legacy-wrapper`; setup-steam.sh does it)
 
 0. **Wrapper template** = latest (`scripts/update-wrapper.sh`). Wine 11 engines need template
    1.0.16+; on older templates they fail with `SikarugirSdk.FileUtilsError error 1`.
@@ -61,7 +73,7 @@ online-only? ──> warn: online often broken under Wine even if game runs
 5. **Clear caches** (`config/htmlcache`, `appcache/httpcache`) before first launch.
 6. First launch: webhelper rebuild ~30-40s. If `0x3008` dialog: choose "VO: Continue Anyway".
 
-## Key paths (computed, never hardcode the username)
+## Key paths, legacy wrapper (computed, never hardcode the username)
 
 ```
 Wrapper:      ~/Applications/Sikarugir/<Name>.app
@@ -87,21 +99,25 @@ Extracted D3DMetal: ~/GPTk-D3DMetal/lib/external
 
 ## Updating
 
+- NotProton stack: `scripts/setup-notproton.sh --skip-build` (new Steam signatures, re-staged bridge);
+  `--force` rebuilds fork + runner. Bump pins (fork commit, engine, template, checksums) at the top of the script.
+
 - Wrapper template: `scripts/update-wrapper.sh` (backs up, keeps SharedSupport).
 - DXMT: `scripts/update-dxmt.sh` (latest release; leaves newer dev builds alone).
 - D3DMetal: re-run `scripts/fetch-d3dmetal.sh` with a newer GPTk DMG, then re-overlay via
   `setup-steam.sh`.
 - Launchers: `brew upgrade --cask heroic sikarugir` (Heroic also self-updates).
 
-## NotProton
+## NotProton (the default Steam route)
 
-NotProton needs paid CrossOver (licence check + build allowlist). Never strip the licence
-check while using CrossOver. A free fork (Maxyme/NotProton `standalone-steam-gptk4`) exists
-but is unproven and modifies the native Steam.app; only try it if the user asks, and back up
-`/Applications/Steam.app` first. See docs/NOTPROTON.md.
+Free fork = Maxyme/NotProton `5b8d186` + `notproton/notproton-free.patch`, on Sikarugir Wine 11
+with the ntdll detour from `notproton/ntdll-sikarugir11.json`. Details: docs/NOTPROTON.md.
+Paths: runner `~/Library/Application Support/notproton/runners/sikarugir-11` (`current` symlink),
+bridge `.../notproton/bridge`, build tree `~/Library/Caches/notproton-free/src` (no spaces: the
+fork's Makefile can't handle them), Steam.app backup `.../notproton-free/backup-*/`.
+Upstream NotProton (CrossOver-only): never strip its licence check while using CrossOver.
 
 ## What NOT to automate
 
-- Sikarugir wrapper *creation* (no headless API) — must be a GUI step. Detect its absence
-  and instruct the user with exact clicks, then continue automatically.
+- (Legacy route only) Sikarugir wrapper *creation* has no headless API: a GUI step.
 - Logging into Steam/Epic/etc. — user credentials; never handle these.

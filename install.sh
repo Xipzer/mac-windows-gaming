@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# install.sh — one-shot setup for a free Windows-gaming environment on Apple Silicon macOS.
+# install.sh — one-shot setup for free Windows gaming on Apple Silicon macOS.
 #
-# What it does (all free, no CrossOver):
-#   1. Verifies Apple Silicon + macOS 14+.
-#   2. Installs Rosetta 2, Homebrew, helper tools (cabextract, p7zip).
-#   3. Installs Heroic Games Launcher (Epic/GOG/Amazon) + Sikarugir (Steam).
-#   4. Fetches YOUR OWN Apple D3DMetal locally (never redistributed).
-#   5. Guides the 2 unavoidable Sikarugir GUI clicks, then auto-applies every fix.
+# Default route (Oct 2026): NATIVE macOS Steam + a free NotProton fork on Sikarugir Wine 11.
+# Windows games get a normal Play button in the Mac Steam app. No CrossOver, no wrapper.
+#
+#   1. Verifies Apple Silicon + macOS 14+, installs Rosetta 2, Homebrew, cmake.
+#   2. Installs Steam for macOS (if missing) and Heroic (Epic/GOG/Amazon).
+#   3. Runs scripts/setup-notproton.sh: builds the fork, assembles the Wine 11 runner,
+#      stages the Steam bridge, patches Steam.app (backed up first).
 #
 # Run it:
 #   curl -fsSL https://raw.githubusercontent.com/Xipzer/mac-windows-gaming/main/install.sh | bash
@@ -14,73 +15,77 @@
 #   ./install.sh
 #
 # Flags:
-#   --no-steam     skip the Steam/Sikarugir wrapper part (Heroic only)
-#   --gptk-dmg P   use a specific Game Porting Toolkit DMG for D3DMetal
+#   --no-heroic        skip Heroic
+#   --no-steam         skip all Steam setup (Heroic only)
+#   --legacy-wrapper   old route: Windows Steam inside a Sikarugir wrapper (needs 2 GUI clicks)
+#   --gptk-dmg P       (legacy route only) use a specific Game Porting Toolkit DMG
 #
-# See docs/ for the full knowledge base. This script is idempotent — safe to re-run.
+# Idempotent — safe to re-run (also the fix after a Steam client update).
 
 set -euo pipefail
 
-# Resolve script dir even when curl|bash'd (fall back to fetching scripts).
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
-RAW_BASE="https://raw.githubusercontent.com/Xipzer/mac-windows-gaming/main"
+REPO_URL="https://github.com/Xipzer/mac-windows-gaming.git"
 
-fetch_lib() {
-  # If run via curl|bash, scripts/ won't exist locally — fetch them to a temp dir.
-  if [[ -f "${SELF_DIR}/scripts/lib.sh" ]]; then
-    SCRIPTS_DIR="${SELF_DIR}/scripts"
+# curl|bash has no repo next to it: clone one (setup-notproton.sh needs notproton/ assets).
+resolve_repo() {
+  if [[ -f "${SELF_DIR}/scripts/lib.sh" && -d "${SELF_DIR}/notproton" ]]; then
+    REPO_DIR="$SELF_DIR"
   else
-    SCRIPTS_DIR="$(mktemp -d /tmp/mwg.XXXXXX)"
-    local s
-    for s in lib.sh fetch-d3dmetal.sh setup-steam.sh swap-engine.sh update-wrapper.sh update-dxmt.sh check-compat.sh doctor.sh; do
-      curl -fsSL -o "${SCRIPTS_DIR}/${s}" "${RAW_BASE}/scripts/${s}"
-      chmod +x "${SCRIPTS_DIR}/${s}"
-    done
+    REPO_DIR="$HOME/Library/Caches/mac-windows-gaming"
+    if [[ -d "$REPO_DIR/.git" ]]; then git -C "$REPO_DIR" pull -q --ff-only || true
+    else rm -rf "$REPO_DIR"; git clone -q --depth 1 "$REPO_URL" "$REPO_DIR"; fi
   fi
+  SCRIPTS_DIR="$REPO_DIR/scripts"
+  # shellcheck source=scripts/lib.sh
   source "${SCRIPTS_DIR}/lib.sh"
 }
 
-NO_STEAM=0; GPTK_DMG_ARG=""
+NO_HEROIC=0; LEGACY=0; SKIP_STEAM=0; GPTK_DMG_ARG=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --no-steam) NO_STEAM=1; shift;;
+    --no-heroic) NO_HEROIC=1; shift;;
+    --legacy-wrapper) LEGACY=1; shift;;
     --gptk-dmg) GPTK_DMG_ARG="$2"; shift 2;;
+    --no-steam) SKIP_STEAM=1; shift;;
     *) shift;;
   esac
 done
 
 main() {
-  fetch_lib
+  command -v git >/dev/null || { echo "git missing: run  xcode-select --install  then re-run"; exit 1; }
+  resolve_repo
 
   info "mac-windows-gaming — one-shot installer"
   log  "macOS $(sw_vers -productVersion) ($(uname -m))"
-
   require_apple_silicon
   require_macos_14_plus
   ensure_rosetta
   ensure_homebrew
+  brew list cmake >/dev/null 2>&1 || brew install --quiet cmake
+  ok "cmake"
 
-  info "Installing helper tools…"
-  brew install --quiet cabextract p7zip 2>/dev/null || true
-  ok "cabextract, p7zip"
-
-  info "Installing launchers…"
-  brew install --quiet --cask "$HEROIC_CASK" 2>/dev/null || true
-  ok "Heroic Games Launcher"
-  brew tap Sikarugir-App/sikarugir >/dev/null 2>&1 || true
-  brew install --quiet --cask "Sikarugir-App/sikarugir/${SIKARUGIR_CASK}" 2>/dev/null || true
-  ok "Sikarugir Creator"
-
-  info "Obtaining Apple D3DMetal (locally, never redistributed)…"
-  if [[ -n "$GPTK_DMG_ARG" ]]; then
-    GPTK_DMG="$GPTK_DMG_ARG" bash "${SCRIPTS_DIR}/fetch-d3dmetal.sh" || warn "D3DMetal not obtained; you can run scripts/fetch-d3dmetal.sh later."
-  else
-    bash "${SCRIPTS_DIR}/fetch-d3dmetal.sh" || warn "D3DMetal not obtained; you can run scripts/fetch-d3dmetal.sh later."
+  if (( ! NO_HEROIC )); then
+    brew install --quiet --cask "$HEROIC_CASK" 2>/dev/null || true
+    ok "Heroic Games Launcher (Epic/GOG/Amazon)"
   fi
 
-  if [[ "$NO_STEAM" -eq 0 ]]; then
-    info "Setting up Steam wrapper…"
+  if (( SKIP_STEAM )); then :
+  elif (( LEGACY )); then
+    brew tap Sikarugir-App/sikarugir >/dev/null 2>&1 || true
+    brew install --quiet --cask "Sikarugir-App/sikarugir/${SIKARUGIR_CASK}" 2>/dev/null || true
+    if [[ -n "$GPTK_DMG_ARG" ]]; then GPTK_DMG="$GPTK_DMG_ARG" bash "${SCRIPTS_DIR}/fetch-d3dmetal.sh" || true
+    else bash "${SCRIPTS_DIR}/fetch-d3dmetal.sh" || true; fi
     bash "${SCRIPTS_DIR}/setup-steam.sh" || true
+  else
+    if [[ ! -d /Applications/Steam.app ]]; then
+      info "Installing Steam for macOS"
+      brew install --quiet --cask steam
+      warn "Open Steam once, log in and let it finish updating, then quit it and re-run this installer."
+      open -a Steam || true
+      exit 0
+    fi
+    bash "${SCRIPTS_DIR}/setup-notproton.sh"
   fi
 
   cat <<EOF
@@ -88,16 +93,14 @@ main() {
 ${C_GRN}${C_B}Done.${C_RESET}
 
 Next:
-  • Heroic: open Heroic -> Settings -> Wine Manager -> download 'Game-Porting-Toolkit',
-    set it as default runner + enable ESYNC, then log into Epic/GOG/Amazon.
-  • Steam:  if setup-steam printed a GUI step, do it once and re-run:
-              bash "${SCRIPTS_DIR}/setup-steam.sh"
-            then:  open ~/Applications/Sikarugir/Steam.app
+  • Steam:  open -a Steam  → Windows games now show a Play button.
+            Settings → Compatibility shows "NotProton (free, Wine 11)" as the default.
+  • Heroic: Settings → Wine Manager → download 'Game-Porting-Toolkit', set it as the
+            default runner, then log into Epic/GOG/Amazon.
 
-Check a game before installing:
-  bash "${SCRIPTS_DIR}/check-compat.sh" <steam_app_id>
-
-Full docs & troubleshooting: https://github.com/Xipzer/mac-windows-gaming
+Check a game first:   bash "${SCRIPTS_DIR}/check-compat.sh" <steam_app_id>
+After a Steam update stops games launching:   bash "${SCRIPTS_DIR}/setup-notproton.sh" --skip-build
+Docs & troubleshooting: https://github.com/Xipzer/mac-windows-gaming
 EOF
 }
 main "$@"
