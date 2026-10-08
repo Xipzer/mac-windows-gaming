@@ -1,18 +1,14 @@
 #!/usr/bin/env bash
-# install.sh — one-shot setup for free Windows gaming on Apple Silicon macOS.
+# install.sh - one-shot setup for free Windows gaming on Apple Silicon macOS.
+# Default route: native Mac Steam + free NotProton fork on Sikarugir Wine 11.
 #
-# Default route (Oct 2026): NATIVE macOS Steam + a free NotProton fork on Sikarugir Wine 11.
-# Windows games get a normal Play button in the Mac Steam app. No CrossOver, no wrapper.
-#
-#   1. Verifies Apple Silicon + macOS 14+, installs Rosetta 2, Homebrew, cmake.
+#   1. Checks Apple Silicon + macOS 14+; installs Rosetta 2, Homebrew, cmake.
 #   2. Installs Steam for macOS (if missing) and Heroic (Epic/GOG/Amazon).
-#   3. Runs scripts/setup-notproton.sh: builds the fork, assembles the Wine 11 runner,
-#      stages the Steam bridge, patches Steam.app (backed up first).
+#   3. Runs scripts/setup-notproton.sh (builds the fork, assembles the Wine 11 runner,
+#      stages the Steam bridge, patches Steam.app after backing it up).
 #
-# Run it:
-#   curl -fsSL https://raw.githubusercontent.com/Xipzer/mac-windows-gaming/main/install.sh | bash
-# or, cloned:
-#   ./install.sh
+# Run:  curl -fsSL https://raw.githubusercontent.com/Xipzer/mac-windows-gaming/main/install.sh | bash
+#   or: ./install.sh
 #
 # Flags:
 #   --no-heroic        skip Heroic
@@ -20,7 +16,7 @@
 #   --legacy-wrapper   old route: Windows Steam inside a Sikarugir wrapper (needs 2 GUI clicks)
 #   --gptk-dmg P       (legacy route only) use a specific Game Porting Toolkit DMG
 #
-# Idempotent — safe to re-run (also the fix after a Steam client update).
+# Idempotent. Re-running is also the fix after a Steam client update.
 
 set -euo pipefail
 
@@ -56,7 +52,7 @@ main() {
   command -v git >/dev/null || { echo "git missing: run  xcode-select --install  then re-run"; exit 1; }
   resolve_repo
 
-  info "mac-windows-gaming — one-shot installer"
+  info "mac-windows-gaming - one-shot installer"
   log  "macOS $(sw_vers -productVersion) ($(uname -m))"
   require_apple_silicon
   require_macos_14_plus

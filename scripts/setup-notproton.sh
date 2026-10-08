@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# setup-notproton.sh — free NotProton for NATIVE macOS Steam, on Sikarugir Wine 11.
+# setup-notproton.sh - free NotProton for NATIVE macOS Steam, on Sikarugir Wine 11.
 #
-# Result: /Applications/Steam.app (the normal Mac Steam) runs Windows games itself.
-# No Windows-Steam wrapper, no CrossOver licence. Every Windows game in your Mac
-# Steam library gets a working Play button.
+# Result: /Applications/Steam.app runs Windows games itself, with a normal Play button.
+# No Windows-Steam wrapper, no CrossOver licence.
 #
 # Pieces (all pinned + checksummed, all free):
 #   NotProton fork  Maxyme/NotProton @ standalone-steam-gptk4 (GPL-3.0) + notproton/notproton-free.patch

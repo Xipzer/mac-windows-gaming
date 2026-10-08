@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
-# fetch-d3dmetal.sh — obtain Apple's D3DMetal on THIS machine (never redistributed).
+# fetch-d3dmetal.sh - (legacy wrapper route) get Apple's D3DMetal on THIS machine.
 #
-# WHY: Apple's D3DMetal (the DirectX 11/12 -> Metal translator) is free to download
-#      but its EULA forbids redistribution. So this repo ships ZERO Apple binaries.
-#      Instead, each user fetches their own copy locally, here, at install time.
-#
-# OPTIONAL since Oct 2026: Sikarugir wrapper templates (1.0.21+) already bundle D3DMetal
-# (4.0b2). Use this only if you have a NEWER Apple build than the wrapper ships.
+# Apple's D3DMetal (DirectX 11/12 -> Metal) is free to download but its EULA forbids
+# redistribution, so this repo ships no Apple binaries; each user fetches their own.
+# Optional since Oct 2026: templates 1.0.21+ bundle D3DMetal 4.0b2. Use this only for a
+# NEWER Apple build than the wrapper ships.
 #
 # Sources tried, in order:
 #   1. A GPTk DMG the user already has (arg / env GPTK_DMG / ~/Downloads/*Game_Porting_Toolkit*.dmg)
@@ -111,7 +109,7 @@ Do ONE of the following, then re-run:
   • Or install Gcenx's formula manually:
       brew install gcenx/wine/game-porting-toolkit
 
-Note: this repo cannot ship D3DMetal — Apple's license forbids redistribution.
+Note: this repo cannot ship D3DMetal - Apple's license forbids redistribution.
 EOF
   exit 1
 }

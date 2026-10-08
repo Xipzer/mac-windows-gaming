@@ -10,8 +10,9 @@ Used by `scripts/setup-notproton.sh`. Background: [../docs/NOTPROTON.md](../docs
 | `runner.env` | Environment Sikarugir's launcher sets for Wine 11 + D3DMetal, sourced by the run script |
 | `direct-shipping.sh` | Launch-option wrapper for Dragon Ball Sparking! ZERO (skips the UE launcher stub) |
 
-**Rebuilding the detour for a different engine** needs the upstream NotProton repo and
-`brew install mingw-w64 capstone`:
+## Rebuilding the detour for another engine
+
+Needs the upstream NotProton repo and `brew install mingw-w64 capstone`:
 
 ```bash
 cd NotProton/ntdll-patch
@@ -19,12 +20,10 @@ NP_FORCE_LOAD_PATH=0x58 sh build.sh /path/to/clean/ntdll.dll myengine   # -> det
 NP_FORCE_LOAD_PATH=0x58 python3 apply.py clean.dll patched.dll detour2-myengine.bin
 ```
 
-`resolve.py` must accept `NP_FORCE_LOAD_PATH` (the `load_path` stack slot) because Sikarugir's
-build keeps it at `rsp+0x58` where upstream's heuristic expects another slot. Find it by
-disassembling `build_module` up to the hook.
+- `resolve.py` must accept `NP_FORCE_LOAD_PATH` (the `load_path` stack slot): Sikarugir's build keeps it at `rsp+0x58`, where upstream's heuristic expects another slot.
+- Find the slot by disassembling `build_module` up to the hook.
 
 ## License
 
-The files in this directory are derived from NotProton (GPL-3.0) and are distributed under
-the **GNU General Public License v3.0**. Source: https://github.com/NotProtonNot/NotProton and
+Files in this directory derive from NotProton and are **GPL-3.0**. Sources: https://github.com/NotProtonNot/NotProton,
 https://github.com/Maxyme/NotProton. The rest of this repository is MIT.

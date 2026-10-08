@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
-# update-wrapper.sh — bring a Sikarugir wrapper's template (launcher, libraries,
-# renderers) up to the newest published version. CLI equivalent of
-# Configure -> Tools -> Update Wrapper.
+# update-wrapper.sh - (legacy route) update a Sikarugir wrapper's template (launcher,
+# libraries, renderers) to the newest version. CLI form of Configure -> Tools -> Update Wrapper.
 #
-# WHY: Wine 11 engines need a newer wrapper template. On an old template (1.0.11)
-#      a Wine 11 engine fails at launch with:
+# Why: on template 1.0.11 a Wine 11 engine fails at launch with
 #        ERROR: The operation couldn't be completed. (SikarugirSdk.FileUtilsError error 1.)
-#      Template 1.0.21 runs it fine. Newer templates also bundle newer renderers
-#      (e.g. 1.0.21 ships D3DMetal 4.0b2 and a DXMT build newer than v0.80).
+#      1.0.21 runs it and bundles newer renderers (D3DMetal 4.0b2, DXMT newer than v0.80).
 #
 # What it replaces:  Contents/{MacOS,Frameworks,Resources,Configure.app}
 # What it keeps:     Contents/SharedSupport (Wine engine, prefix, your games), Info.plist

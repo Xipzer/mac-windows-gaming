@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# check-compat.sh — will this game run on Apple Silicon Mac via the free stack?
+# check-compat.sh - will this game run on Apple Silicon via the free stack?
 #
-# Encodes the decision tree we learned the hard way. It queries public sources
-# (ProtonDB) and applies dealbreaker rules (kernel anti-cheat, EA App, native ports).
-# It is ADVISORY — always sanity-check against AppleGamingWiki for the final word.
+# Queries ProtonDB and applies dealbreaker rules (kernel anti-cheat, EA App, native ports).
+# Advisory only: confirm on AppleGamingWiki. Decision tree: docs/COMPATIBILITY.md.
 #
 # Usage:
 #   ./check-compat.sh <steam_app_id>
@@ -18,29 +17,29 @@ source "${HERE}/lib.sh"
 # Curated dealbreakers / notes keyed by steam appid (things public APIs won't tell you cleanly).
 # Format: appid|verdict|note
 KNOWN=$(cat <<'EOF'
-1774580|BLOCKED_EA|Star Wars Jedi: Survivor — EA game. Needs the EA App, which does NOT work under free Wine (INST-14-1627). Denuvo removed 2024, no anti-cheat. Only path: paid CrossOver.
-1222680|BLOCKED_EA|Need for Speed Heat — EA game. EA App required; no free route. Use CrossOver.
-730|BLOCKED_AC|Counter-Strike 2 — VAC + kernel-adjacent anti-cheat. Does not run under Wine on Mac.
-1790600|OK|Dragon Ball Sparking! ZERO — DX12, no Denuvo, no anti-cheat. Works via D3DMetal. Lock 60 FPS (game speed tied to FPS). Offline only (online broken under Wine).
-1237320|OK|Sonic Frontiers — no anti-cheat. Generally works via D3DMetal.
-920210|OK|LEGO Star Wars: The Skywalker Saga — works via D3DMetal.
-208650|NATIVE|Batman: Arkham Knight — heavy DX11; check AppleGamingWiki, D3DMetal works but tune settings.
+1774580|BLOCKED_EA|Star Wars Jedi: Survivor - EA game. Needs the EA App, which does NOT work under free Wine (INST-14-1627). Denuvo removed 2024, no anti-cheat. Only path: paid CrossOver.
+1222680|BLOCKED_EA|Need for Speed Heat - EA game. EA App required; no free route. Use CrossOver.
+730|BLOCKED_AC|Counter-Strike 2 - VAC + kernel-adjacent anti-cheat. Does not run under Wine on Mac.
+1790600|OK|Dragon Ball Sparking! ZERO - DX12, no Denuvo, no anti-cheat. Works via D3DMetal. Lock 60 FPS (game speed tied to FPS). Offline only (online broken under Wine).
+1237320|OK|Sonic Frontiers - no anti-cheat. Generally works via D3DMetal.
+920210|OK|LEGO Star Wars: The Skywalker Saga - works via D3DMetal.
+208650|NATIVE|Batman: Arkham Knight - heavy DX11; check AppleGamingWiki, D3DMetal works but tune settings.
 EOF
 )
 
-# Games with official native macOS ports — prefer native over translation.
+# Games with official native macOS ports - prefer native over translation.
 NATIVE_PORTS=$(cat <<'EOF'
-Batman: Arkham City|64-bit Metal (Rosetta). Run NATIVE — beats D3DMetal.
-Middle-earth: Shadow of Mordor|64-bit Metal (Rosetta). Run NATIVE — Wine route is unplayable.
+Batman: Arkham City|64-bit Metal (Rosetta). Run NATIVE - beats D3DMetal.
+Middle-earth: Shadow of Mordor|64-bit Metal (Rosetta). Run NATIVE - Wine route is unplayable.
 Tomb Raider|64-bit Metal (Rosetta). Run NATIVE; add Steam launch option -nolauncher (32-bit launcher is broken).
-Valheim|Apple Silicon NATIVE build. Run NATIVE — no Rosetta, no Wine.
+Valheim|Apple Silicon NATIVE build. Run NATIVE - no Rosetta, no Wine.
 EOF
 )
 
-verdict_ok()      { printf '%s\n' "${C_GRN}${C_B}LIKELY WORKS${C_RESET} — $*"; exit 0; }
-verdict_caveat()  { printf '%s\n' "${C_YEL}${C_B}WORKS WITH CAVEATS${C_RESET} — $*"; exit 2; }
-verdict_blocked() { printf '%s\n' "${C_RED}${C_B}BLOCKED (free route)${C_RESET} — $*"; exit 3; }
-verdict_native()  { printf '%s\n' "${C_BLU}${C_B}RUN NATIVE INSTEAD${C_RESET} — $*"; exit 0; }
+verdict_ok()      { printf '%s\n' "${C_GRN}${C_B}LIKELY WORKS${C_RESET} - $*"; exit 0; }
+verdict_caveat()  { printf '%s\n' "${C_YEL}${C_B}WORKS WITH CAVEATS${C_RESET} - $*"; exit 2; }
+verdict_blocked() { printf '%s\n' "${C_RED}${C_B}BLOCKED (free route)${C_RESET} - $*"; exit 3; }
+verdict_native()  { printf '%s\n' "${C_BLU}${C_B}RUN NATIVE INSTEAD${C_RESET} - $*"; exit 0; }
 
 links() {
   local id="$1"
@@ -67,7 +66,7 @@ check_by_id() {
   fi
 
   # Fall back to ProtonDB tier as a heuristic
-  info "No curated entry — querying ProtonDB for appid ${id}…"
+  info "No curated entry - querying ProtonDB for appid ${id}…"
   local tier
   tier="$(curl -fsSL "https://www.protondb.com/api/v1/reports/summaries/${id}.json" 2>/dev/null \
           | sed -n 's/.*"tier": *"\([^"]*\)".*/\1/p' | head -1 || true)"
@@ -76,7 +75,7 @@ check_by_id() {
     platinum|gold) verdict_ok "ProtonDB tier: ${tier}. Good sign. Confirm no kernel anti-cheat / EA App.";;
     silver)        verdict_caveat "ProtonDB tier: silver. Playable but expect tweaks.";;
     bronze|borked) verdict_blocked "ProtonDB tier: ${tier}. Poor. Likely not worth it on Mac.";;
-    *)             printf '%s\n' "${C_YEL}UNKNOWN${C_RESET} — no ProtonDB tier found. Check the links above."; exit 1;;
+    *)             printf '%s\n' "${C_YEL}UNKNOWN${C_RESET} - no ProtonDB tier found. Check the links above."; exit 1;;
   esac
 }
 

@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
-# setup-steam.sh — build a working Steam-for-Windows wrapper the hard-won way.
+# setup-steam.sh - (legacy route) build a working Windows-Steam Sikarugir wrapper.
 #
-# This automates the exact sequence that actually works on Apple Silicon in 2026,
-# including every fix we discovered the painful way:
-#   - Latest wrapper template + best Wine engine (Sikarugir 11 / Wine 11) so the CEF webhelper doesn't stall
-#   - Launch target = steam.exe (NOT the installer) so it stops re-running setup
-#   - `-tcp` launch flag so you don't hit "Unexpected Transport Error (0x3008)"
-#   - Freshest Apple D3DMetal overlaid for DX11/12 games
+# Applies the fixes that work on Apple Silicon in 2026:
+#   - Latest template + Sikarugir 11 (Wine 11) engine, so the CEF webhelper doesn't stall
+#   - Launch target = steam.exe (NOT the installer), so setup stops re-running
+#   - `-tcp` launch flag, avoiding "Unexpected Transport Error (0x3008)"
+#   - Newest Apple D3DMetal overlaid for DX11/12 games
 #
-# Sikarugir Creator has a GUI; there is no fully-headless wrapper-create API.
-# So this script does the automatable 90% and tells you the 2 GUI clicks needed.
+# Sikarugir Creator has no headless wrapper-create API, so this automates the rest
+# and prints the 2 GUI clicks needed.
 #
 # Usage:  ./setup-steam.sh
 #         ./setup-steam.sh --engine WS12WineCX24.0.7_7   # override engine
@@ -78,14 +77,14 @@ step_apply_engine() {
 step_fix_launch_target() {
   local w="$1" dc; dc="$(wrapper_drive_c "$w")"
   local steam_exe='C:\Program Files (x86)\Steam\steam.exe'
-  [[ -f "${dc}/Program Files (x86)/Steam/steam.exe" ]] || { warn "steam.exe not found — is Steam installed in the wrapper yet?"; return 1; }
+  [[ -f "${dc}/Program Files (x86)/Steam/steam.exe" ]] || { warn "steam.exe not found - is Steam installed in the wrapper yet?"; return 1; }
   info "Pointing wrapper launch target at steam.exe with -tcp flag…"
   local f
   for f in "${dc}/"exec*.bat; do
     [[ -f "$f" ]] || continue
     printf '"%s" -tcp \n' "$steam_exe" > "$f"
   done
-  ok "Launch target fixed (steam.exe -tcp) — no more installer loop / 0x3008"
+  ok "Launch target fixed (steam.exe -tcp) - no more installer loop / 0x3008"
 }
 
 step_overlay_d3dmetal() {

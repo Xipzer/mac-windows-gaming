@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# doctor.sh — inspect the current environment and report what's installed / current.
-# Read-only. Great for humans debugging and for agents to gather state before acting.
+# doctor.sh - report what's installed and which versions. Read-only.
+# Run before debugging or before an agent acts.
 
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,7 +23,7 @@ info "D3DMetal (extracted)"
 if [[ -x "${GPTK_EXTRACT_DIR}/lib/external/D3DMetal.framework/Versions/A/D3DMetal" ]]; then
   ok "present: $(d3dmetal_version "${GPTK_EXTRACT_DIR}/lib/external") at ${GPTK_EXTRACT_DIR}/lib/external"
 else
-  log "  not extracted (optional — recent wrapper templates bundle D3DMetal)"
+  log "  not extracted (optional - recent wrapper templates bundle D3DMetal)"
 fi
 
 info "Sikarugir engines cached"

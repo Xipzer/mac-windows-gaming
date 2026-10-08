@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# update-dxmt.sh — update the DXMT (DirectX 10/11 -> Metal) layer in a wrapper.
+# update-dxmt.sh - (legacy route) update DXMT (DirectX 10/11 -> Metal) in a wrapper.
 #
-# DXMT is the best FREE open DX10/11->Metal translator. Sikarugir bundles a version;
-# this pulls the latest "builtin" release from github.com/3Shain/dxmt and overlays it.
-# Only matters for DX10/11 games where you select DXMT instead of D3DMetal.
+# Overlays the latest "builtin" release from github.com/3Shain/dxmt over Sikarugir's
+# bundled copy. Only matters for DX10/11 games set to DXMT instead of D3DMetal.
 #
 # Usage:  ./update-dxmt.sh [WrapperName]
 
@@ -26,7 +25,7 @@ if [[ "$cur" == "$tag" ]]; then ok "Already up to date (${tag})"; exit 0; fi
 # Newer Sikarugir templates ship development builds like "v0.80-244-g7c8dee1" (244 commits
 # past v0.80). Those are NEWER than the release, so don't "update" them backwards.
 if [[ "$cur" == "${tag}-"* ]] || { [[ -n "$cur" ]] && version_gt "${cur#v}" "${tag#v}"; }; then
-  ok "Installed ${cur} is newer than the latest release ${tag} — leaving it"
+  ok "Installed ${cur} is newer than the latest release ${tag} - leaving it"
   exit 0
 fi
 

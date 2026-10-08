@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# lib.sh — shared functions for the mac-windows-gaming toolkit.
+# lib.sh - shared functions for the mac-windows-gaming toolkit.
 # Source this from other scripts:  source "$(dirname "$0")/lib.sh"
 #
 # Design notes for AGENTS:
@@ -17,8 +17,8 @@ set -o pipefail
 export SIKARUGIR_ENGINES_DIR="${HOME}/Library/Application Support/Sikarugir/Engines"
 export SIKARUGIR_WRAPPERS_DIR="${HOME}/Applications/Sikarugir"
 export GPTK_EXTRACT_DIR="${HOME}/GPTk-D3DMetal"   # where we cache extracted D3DMetal
-export BEST_ENGINE="WS12WineSikarugir11.0_1"      # Wine 11 — best all-rounder (see docs/ENGINES.md)
-export FALLBACK_ENGINE="WS12WineSikarugir10.0_8"  # Wine 10 — previous known-good line
+export BEST_ENGINE="WS12WineSikarugir11.0_1"      # Wine 11 - best all-rounder (see docs/ENGINES.md)
+export FALLBACK_ENGINE="WS12WineSikarugir10.0_8"  # Wine 10 - previous known-good line
 export SIKARUGIR_ENGINES_URL="https://github.com/Sikarugir-App/Engines/releases/download/v1.0"
 export SIKARUGIR_ENGINE_LIST="https://raw.githubusercontent.com/Sikarugir-App/Engines/main/EngineList.txt"
 export SIKARUGIR_WRAPPER_RELEASE_API="https://api.github.com/repos/Sikarugir-App/Wrapper/releases/tags/v1.0"
