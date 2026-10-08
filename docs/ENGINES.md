@@ -1,60 +1,87 @@
-# Wine engines & renderers
+# Wine engines, wrapper templates & renderers
 
-The single most important concept: **the Wine engine and the graphics renderer are
-two independent choices.** In Sikarugir, the engine is the whole Wine bundle; the
-renderer (D3DMetal / DXMT / DXVK) is a checkbox in Configure. You mix them freely.
+A Sikarugir wrapper is three separate layers. You can update each one on its own:
 
-## The engines (Sikarugir)
-
-| Engine | Wine base | Built by | Best for | Avoid for |
-|---|---|---|---|---|
-| **WS12WineSikarugir10.0_6** | **Wine 10** | Gcenx | ★ Everything. Newest Wine, most stable modern Steam webhelper. **Default.** | — |
-| WS12WineCX24.0.7_7 | Wine 9 | CodeWeavers/Gcenx | Mature fallback, general apps | — |
-| WS12WineGPTK1.1_3 | Wine 7 (2023) | Apple/Gcenx | D3DMetal specialist only | **Modern Steam client — its CEF webhelper STALLS** |
-
-**Why Sikarugir 10 wins:** newer Wine = newer bundled Chromium/CEF and wineserver fixes,
-which is exactly what the modern Steam client's `steamwebhelper` needs. GPTk 1.1's
-Wine 7 base cannot drive it (you get `CSteamEngine::BMainLoop appears to have stalled`).
-
-There is **no Wine 11 Sikarugir engine** as of July 2026 — Sikarugir 10 is the newest.
-
-Swap engines from the CLI:
-```bash
-bash scripts/swap-engine.sh WS12WineSikarugir10.0_6 Steam
 ```
-(Engines must be downloaded once via Sikarugir's GUI so they're cached in
-`~/Library/Application Support/Sikarugir/Engines/`.)
+Wrapper template   launcher + libraries + bundled renderers   scripts/update-wrapper.sh
+Wine engine        the Wine build that runs Windows programs  scripts/swap-engine.sh
+Renderer           D3DMetal / DXMT / DXVK (Configure checkbox) per game
+```
 
-## The renderers
+## Wine engines (Sikarugir)
+
+| Engine | Wine | Use it for | Notes |
+|---|---|---|---|
+| **WS12WineSikarugir11.0_1** | **Wine 11** | ★ **Default.** Steam client and games | Needs wrapper template **1.0.16+** |
+| WS12WineSikarugir10.0_8 | Wine 10 | Fallback if a game regresses on 11 | Works on older templates |
+| WS12WineCX24.0.7_7 | Wine 9 | Older fallback | CrossOver 24's open-source Wine |
+| WS12WineGPTK1.1_3 | Wine 7 | Avoid | Can't run the modern Steam webhelper (it stalls) |
+
+The full list Sikarugir offers is at
+https://raw.githubusercontent.com/Sikarugir-App/Engines/main/EngineList.txt.
+`swap-engine.sh` downloads any engine from that list automatically.
+
+```bash
+bash scripts/swap-engine.sh WS12WineSikarugir11.0_1 Steam   # also updates the template if needed
+bash scripts/swap-engine.sh WS12WineSikarugir10.0_8 Steam   # roll back to Wine 10
+```
+
+Each swap keeps the previous engine as `SharedSupport/wine.backup-<timestamp>`.
+
+## Wrapper templates
+
+The template is the wrapper's launcher plus its bundled libraries and renderers. Newer
+templates matter for two reasons:
+
+1. **Wine 11 engines need template 1.0.16 or newer.** On template 1.0.11, a Wine 11
+   engine dies at launch with
+   `ERROR: The operation couldn't be completed. (SikarugirSdk.FileUtilsError error 1.)`
+2. **Newer templates bundle newer renderers.** Template 1.0.21 (1 Oct 2026) ships
+   **D3DMetal 4.0b2** and DXMT **v0.80-244** (a development build newer than the v0.80
+   release).
+
+```bash
+bash scripts/update-wrapper.sh Steam
+```
+
+This replaces `Contents/{MacOS,Frameworks,Resources,Configure.app}`, keeps
+`SharedSupport` (engine, prefix, games) and your `Info.plist` settings, and backs up the
+old parts to `~/Applications/Sikarugir/.Steam-wrapper-backup-<timestamp>/`. It's the same
+as Configure → Tools → Update Wrapper.
+
+## Renderers
 
 | Renderer | Translates | Notes |
 |---|---|---|
-| **D3DMetal** (Apple GPTk) | DirectX **11 & 12** → Metal | Closed-source, free, Apple Silicon only. Best for DX12. MetalFX/DLSS-translation. |
-| **DXMT** (3Shain) | DirectX **10 & 11** → Metal | Best free open layer for DX10/11. Update via `scripts/update-dxmt.sh`. |
-| **DXVK** | DirectX 10/11 → Vulkan (MoltenVK) | Fallback; the only option on Intel Macs. |
+| **D3DMetal** (Apple GPTk) | DirectX 11 & 12 → Metal | Best for DX12. MetalFX upscaling. Apple Silicon only. |
+| **DXMT** (3Shain) | DirectX 10 & 11 → Metal | Best open-source option for DX10/11 |
+| **DXVK** | DirectX 10/11 → Vulkan (MoltenVK) | Fallback |
 
-Pick per game:
 ```
 DirectX 12    -> D3DMetal
 DirectX 11    -> D3DMetal (try DXMT if glitchy)
 DirectX 10/9  -> DXMT or DXVK
-Old / 2D      -> WineD3D (default), or run native
 ```
 
-## D3DMetal versions (don't conflate the two lineages)
+### D3DMetal versions
 
-- **Apple GPTk track** (developer.apple.com / Gcenx): GPTk **4.0 beta 1** (1 Jun 2026)
-  is the newest Apple beta. Stable line is 3.0-3.
-- **CrossOver's D3DMetal**: the 3.x line, which Sikarugir bundles as `D3DMetal/3.0/`.
+- Recent templates already include D3DMetal (template 1.0.21 has **4.0b2**), so most
+  people no longer need to download Apple's DMG.
+- `fetch-d3dmetal.sh` is still there if you have a newer Apple build. `setup-steam.sh`
+  only overlays your copy when it's **newer** than the wrapper's, so it never downgrades.
 
-This repo overlays the freshest **Apple GPTk** D3DMetal you provide over Sikarugir's
-bundled 3.0. If you ever hit a regression, the stock `D3DMetal/3.0` is the tested-stable
-fallback (a `.bak-*` copy is made automatically).
+### DXMT versions
 
-## Current recommended config (July 2026)
+`update-dxmt.sh` installs the latest DXMT release, but it leaves newer development builds
+(like `v0.80-244-g7c8dee1`) alone.
+
+## Recommended config (October 2026)
 
 ```
-Engine:    WS12WineSikarugir10.0_6  (Wine 10)
-Renderer:  D3DMetal (Apple GPTk 4.0 beta1)  for DX11/12
-DXMT:      v0.80                             for DX10/11 when D3DMetal misbehaves
+Template:  1.0.21
+Engine:    WS12WineSikarugir11.0_1   (Wine 11)
+D3DMetal:  4.0b2   (bundled with the template)
+DXMT:      v0.80-244 dev build (bundled), or v0.80 release
 ```
+
+Tested on macOS 26.6.2, Apple M4 Max: Steam starts, the webhelper runs and the account logs in.

@@ -5,6 +5,9 @@
 #      but its EULA forbids redistribution. So this repo ships ZERO Apple binaries.
 #      Instead, each user fetches their own copy locally, here, at install time.
 #
+# OPTIONAL since Oct 2026: Sikarugir wrapper templates (1.0.21+) already bundle D3DMetal
+# (4.0b2). Use this only if you have a NEWER Apple build than the wrapper ships.
+#
 # Sources tried, in order:
 #   1. A GPTk DMG the user already has (arg / env GPTK_DMG / ~/Downloads/*Game_Porting_Toolkit*.dmg)
 #   2. Gcenx's Homebrew game-porting-toolkit formula (pulls Apple's redistributable D3DMetal)

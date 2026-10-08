@@ -3,7 +3,7 @@
 #
 # This automates the exact sequence that actually works on Apple Silicon in 2026,
 # including every fix we discovered the painful way:
-#   - Best Wine engine (Sikarugir 10 / Wine 10) so the CEF webhelper doesn't stall
+#   - Latest wrapper template + best Wine engine (Sikarugir 11 / Wine 11) so the CEF webhelper doesn't stall
 #   - Launch target = steam.exe (NOT the installer) so it stops re-running setup
 #   - `-tcp` launch flag so you don't hit "Unexpected Transport Error (0x3008)"
 #   - Freshest Apple D3DMetal overlaid for DX11/12 games
@@ -56,28 +56,23 @@ EOF
   return 1
 }
 
-step_apply_engine() {
-  local w="$1" wine_dir engine_tar
-  wine_dir="$(wrapper_wine_dir "$w")"
-  engine_tar="${SIKARUGIR_ENGINES_DIR}/${ENGINE}.tar.xz"
+step_update_template() {
+  # Newer engines (Wine 11) need a newer wrapper template; newer templates also ship
+  # newer D3DMetal/DXMT. Safe: keeps SharedSupport (engine, prefix, games).
+  bash "${HERE}/update-wrapper.sh" Steam || warn "Template update failed; continuing with the current one"
+}
 
-  local cur=""; [[ -f "${wine_dir}/version" ]] && cur="$(cat "${wine_dir}/version")"
-  if printf '%s' "$cur" | grep -qi "sikarugir 10"; then
-    ok "Wine engine already Sikarugir 10 (Wine 10)"
+step_apply_engine() {
+  local w="$1" wine_dir cur want
+  wine_dir="$(wrapper_wine_dir "$w")"
+  cur=""; [[ -f "${wine_dir}/version" ]] && cur="$(cat "${wine_dir}/version")"
+  # "WS12WineSikarugir11.0_1" -> "sikarugir 11.0 (revision 1)"
+  want="$(printf '%s' "$ENGINE" | sed -E 's/^WS12WineSikarugir([0-9]+\.[0-9]+)(_([0-9]+))?$/sikarugir \1 (revision \3)/' | tr '[:upper:]' '[:lower:]')"
+  if [[ -n "$cur" ]] && printf '%s' "$cur" | tr '[:upper:]' '[:lower:]' | grep -qF "${want% (revision )}"; then
+    ok "Wine engine already ${cur}"
     return 0
   fi
-
-  [[ -f "$engine_tar" ]] || { warn "Engine ${ENGINE} not cached yet (open Sikarugir once to download it), skipping swap"; return 0; }
-
-  info "Applying Wine engine ${ENGINE} (was: ${cur:-none})…"
-  kill_wine
-  local tmp; tmp="$(mktemp -d /tmp/eng.XXXXXX)"
-  tar -xJf "$engine_tar" -C "$tmp"
-  rm -rf "${w}/Contents/SharedSupport/wine.prev-backup" 2>/dev/null || true
-  [[ -d "$wine_dir" ]] && mv "$wine_dir" "${w}/Contents/SharedSupport/wine.prev-backup"
-  mv "${tmp}/wswine.bundle" "$wine_dir"
-  rm -rf "$tmp"
-  ok "Engine now: $(cat "${wine_dir}/version")"
+  bash "${HERE}/swap-engine.sh" "$ENGINE" Steam
 }
 
 step_fix_launch_target() {
@@ -94,14 +89,23 @@ step_fix_launch_target() {
 }
 
 step_overlay_d3dmetal() {
-  local w="$1" ext; ext="$(wrapper_d3dmetal_external "$w")"
+  # Only overlay YOUR extracted D3DMetal if it is newer than what the wrapper already has.
+  # (Sikarugir templates now bundle recent D3DMetal builds, e.g. 4.0b2 in template 1.0.21.)
+  local w="$1" ext mine theirs
+  ext="$(wrapper_d3dmetal_external "$w")"
   [[ -x "${GPTK_EXTRACT_DIR}/lib/external/D3DMetal.framework/Versions/A/D3DMetal" ]] \
-    || { warn "No extracted D3DMetal yet; run fetch-d3dmetal.sh first (skipping overlay)"; return 0; }
-  info "Overlaying freshest Apple D3DMetal into the wrapper…"
+    || { log "  No extracted D3DMetal; using the wrapper's bundled $(d3dmetal_version "$ext")"; return 0; }
+  mine="$(d3dmetal_version "${GPTK_EXTRACT_DIR}/lib/external")"
+  theirs="$(d3dmetal_version "$ext")"
+  if [[ -n "$theirs" ]] && ! version_gt "$mine" "$theirs"; then
+    ok "Wrapper D3DMetal ${theirs} is as new or newer than yours (${mine:-?}); not overlaying"
+    return 0
+  fi
+  info "Overlaying D3DMetal ${mine} over ${theirs:-none}…"
   [[ -d "$ext" ]] || mkdir -p "$ext"
   cp -R "$ext" "${ext}.bak-$(date +%Y%m%d)" 2>/dev/null || true
   ditto "${GPTK_EXTRACT_DIR}/lib/external/" "${ext}/"
-  ok "D3DMetal overlaid ($(ls -la "${ext}/D3DMetal.framework/Versions/A/D3DMetal" | awk '{print $5}') bytes)"
+  ok "D3DMetal now $(d3dmetal_version "$ext")"
 }
 
 step_clear_caches() {
@@ -123,6 +127,7 @@ main() {
   w="$(find_wrapper Steam)"; [[ -n "$w" ]] || die "Steam wrapper still not found"
 
   info "Configuring wrapper: $w"
+  step_update_template
   step_apply_engine "$w"
   step_overlay_d3dmetal "$w"
   step_fix_launch_target "$w" || { warn "Install Steam via Sikarugir 'Install Software' first, then re-run."; exit 0; }
@@ -132,7 +137,8 @@ main() {
 
 ${C_GRN}${C_B}Steam wrapper ready.${C_RESET}
   Engine:    $(cat "$(wrapper_wine_dir "$w")/version")
-  D3DMetal:  overlaid (freshest)
+  Template:  $(wrapper_template_version "$w")
+  D3DMetal:  $(d3dmetal_version "$(wrapper_d3dmetal_external "$w")")
   Launch:    steam.exe -tcp
 
 Launch it:  open "$w"

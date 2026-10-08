@@ -21,9 +21,9 @@ brew list --cask --versions sikarugir 2>/dev/null | sed 's/^/  Sikarugir: /' || 
 
 info "D3DMetal (extracted)"
 if [[ -x "${GPTK_EXTRACT_DIR}/lib/external/D3DMetal.framework/Versions/A/D3DMetal" ]]; then
-  ok "present ($(ls -la "${GPTK_EXTRACT_DIR}/lib/external/D3DMetal.framework/Versions/A/D3DMetal" | awk '{print $5}') bytes) at ${GPTK_EXTRACT_DIR}/lib/external"
+  ok "present: $(d3dmetal_version "${GPTK_EXTRACT_DIR}/lib/external") at ${GPTK_EXTRACT_DIR}/lib/external"
 else
-  warn "not extracted — run scripts/fetch-d3dmetal.sh"
+  log "  not extracted (optional — recent wrapper templates bundle D3DMetal)"
 fi
 
 info "Sikarugir engines cached"
@@ -37,11 +37,13 @@ info "Steam wrapper"
 w="$(find_wrapper Steam || true)"
 if [[ -n "${w:-}" ]]; then
   ok "found: $w"
+  tv="$(wrapper_template_version "$w")"; lt="$(latest_template_version 2>/dev/null || true)"
+  log "  Template: ${tv:-?}$( [[ -n "$lt" ]] && version_gt "$lt" "${tv:-0}" && printf '  (newer available: %s -> scripts/update-wrapper.sh)' "$lt")"
   [[ -f "$(wrapper_wine_dir "$w")/version" ]] && log "  Engine:   $(cat "$(wrapper_wine_dir "$w")/version")"
   [[ -f "$(wrapper_dxmt_dir "$w")/version" ]]  && log "  DXMT:     $(cat "$(wrapper_dxmt_dir "$w")/version")"
   ext="$(wrapper_d3dmetal_external "$w")"
   [[ -x "${ext}/D3DMetal.framework/Versions/A/D3DMetal" ]] && \
-    log "  D3DMetal: $(ls -la "${ext}/D3DMetal.framework/Versions/A/D3DMetal" | awk '{print $5}') bytes (overlaid)"
+    log "  D3DMetal: $(d3dmetal_version "$ext")"
   sd="$(wrapper_steamdir "$w")"
   if [[ -d "${sd}/steamapps/common" ]]; then
     log "  Games:"

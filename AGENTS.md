@@ -24,7 +24,7 @@ and invariants learned from a real end-to-end session.
 ```
 1. gather state   -> bash scripts/doctor.sh          (read-only; parse output)
 2. prerequisites  -> install.sh handles Rosetta/brew/casks (idempotent)
-3. D3DMetal       -> bash scripts/fetch-d3dmetal.sh  (needs GPTK_DMG or brew fallback)
+3. D3DMetal       -> optional: bash scripts/fetch-d3dmetal.sh (templates already bundle it)
 4. Steam wrapper  -> bash scripts/setup-steam.sh     (may require 1 GUI step, then re-run)
 5. per game       -> bash scripts/check-compat.sh <appid>   BEFORE installing
 ```
@@ -48,14 +48,16 @@ online-only? ──> warn: online often broken under Wine even if game runs
 
 ## The Steam wrapper fixes (apply in this order; setup-steam.sh does it)
 
-1. **Engine** = `WS12WineSikarugir10.0_6` (Wine 10). GPTk 1.1 (Wine 7) CANNOT run the
-   modern Steam CEF webhelper — it stalls ("BMainLoop appears to have stalled").
+0. **Wrapper template** = latest (`scripts/update-wrapper.sh`). Wine 11 engines need template
+   1.0.16+; on older templates they fail with `SikarugirSdk.FileUtilsError error 1`.
+1. **Engine** = `WS12WineSikarugir11.0_1` (Wine 11). Fallback `WS12WineSikarugir10.0_8`.
+   GPTk 1.1 (Wine 7) CANNOT run the modern Steam CEF webhelper — it stalls.
 2. **Launch target** = `steam.exe`, not `SteamSetup.exe`. The wrapper's
    `drive_c/exec*.bat` files must contain `"C:\Program Files (x86)\Steam\steam.exe" -tcp`.
    Wrong target = it re-runs the installer forever.
 3. **`-tcp` flag** fixes `Unexpected Transport Error (0x3008)`.
-4. **D3DMetal overlay** = copy `~/GPTk-D3DMetal/lib/external/` into
-   `<wrapper>/Contents/Frameworks/renderer/d3dmetal/external/`.
+4. **D3DMetal** = templates bundle it (1.0.21 has 4.0b2). Only overlay
+   `~/GPTk-D3DMetal/lib/external/` if it is NEWER (setup-steam.sh checks; never downgrade).
 5. **Clear caches** (`config/htmlcache`, `appcache/httpcache`) before first launch.
 6. First launch: webhelper rebuild ~30-40s. If `0x3008` dialog: choose "VO: Continue Anyway".
 
@@ -78,17 +80,25 @@ Extracted D3DMetal: ~/GPTk-D3DMetal/lib/external
 
 ## Engine vs renderer (do not conflate)
 
-- **Engine** (Wine): handles Windows/process/CEF. Sikarugir 10 > CX24 > GPTk 1.1 for the
-  Steam client. Swap with `scripts/swap-engine.sh`.
+- **Engine** (Wine): handles Windows/process/CEF. Sikarugir 11 > Sikarugir 10 > CX24 > GPTk 1.1
+  for the Steam client. Swap with `scripts/swap-engine.sh` (auto-downloads engines).
 - **Renderer** (graphics): D3DMetal / DXMT / DXVK. Chosen by a Configure checkbox,
   **independent** of the engine. DX12 → D3DMetal. DX10/11 → D3DMetal or DXMT.
 
 ## Updating
 
-- DXMT: `scripts/update-dxmt.sh` (pulls latest builtin from 3Shain/dxmt).
+- Wrapper template: `scripts/update-wrapper.sh` (backs up, keeps SharedSupport).
+- DXMT: `scripts/update-dxmt.sh` (latest release; leaves newer dev builds alone).
 - D3DMetal: re-run `scripts/fetch-d3dmetal.sh` with a newer GPTk DMG, then re-overlay via
   `setup-steam.sh`.
 - Launchers: `brew upgrade --cask heroic sikarugir` (Heroic also self-updates).
+
+## NotProton
+
+NotProton needs paid CrossOver (licence check + build allowlist). Never strip the licence
+check while using CrossOver. A free fork (Maxyme/NotProton `standalone-steam-gptk4`) exists
+but is unproven and modifies the native Steam.app; only try it if the user asks, and back up
+`/Applications/Steam.app` first. See docs/NOTPROTON.md.
 
 ## What NOT to automate
 

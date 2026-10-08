@@ -23,6 +23,12 @@ tag="$(gh_latest_tag "$DXMT_REPO")"; [[ -n "$tag" ]] || die "Could not resolve l
 info "DXMT: installed=${cur:-none}  latest=${tag}"
 
 if [[ "$cur" == "$tag" ]]; then ok "Already up to date (${tag})"; exit 0; fi
+# Newer Sikarugir templates ship development builds like "v0.80-244-g7c8dee1" (244 commits
+# past v0.80). Those are NEWER than the release, so don't "update" them backwards.
+if [[ "$cur" == "${tag}-"* ]] || { [[ -n "$cur" ]] && version_gt "${cur#v}" "${tag#v}"; }; then
+  ok "Installed ${cur} is newer than the latest release ${tag} — leaving it"
+  exit 0
+fi
 
 url="$(gh_asset_url "$DXMT_REPO" "builtin")"; [[ -n "$url" ]] || die "No 'builtin' asset in ${tag}"
 info "Downloading ${tag} builtin…"

@@ -1,55 +1,59 @@
 # Sources & version snapshot
 
-## Version snapshot (verified 7–10 July 2026)
+## Version snapshot (8 October 2026)
 
 | Component | Version | Date | Notes |
 |---|---|---|---|
-| macOS | 26.5.2 (Tahoe) | — | Apple M4 Max, arm64 |
-| Heroic Games Launcher | 2.22.0 "Hajrudin" | 16 May 2026 | latest; self-updates |
-| Sikarugir Creator | 1.0.1 | — | Wineskin/Kegworks successor |
-| Wine engine (Sikarugir) | Sikarugir 10.0 rev 6 (Wine 10) | — | newest; no Wine 11 engine exists |
-| D3DMetal (Apple GPTk) | 4.0 beta 1 | 1 Jun 2026 | freshest; no beta 2 yet |
-| DXMT | v0.80 | 23 Apr 2026 | last MIT release; v0.81/v1.0 planned |
-| Gcenx macOS Wine builds | 11.10 | 4 Jun 2026 | standalone; not used directly here |
-| Gcenx game-porting-toolkit | 3.0-3 | 3 Mar 2026 | D3DMetal redistribution |
-| CrossOver (context only) | 26.2.0 | 2026 | D3DMetal 3.x; needed only for EA App |
+| macOS | 26.6.2 (Tahoe) | — | Tested on Apple M4 Max. macOS 27 released 14 Sep 2026 |
+| Heroic Games Launcher | 2.22.3 | 16 Sep 2026 | self-updates |
+| Sikarugir Creator | 1.0.2 | — | Homebrew cask |
+| Sikarugir wrapper template | 1.0.21 | 1 Oct 2026 | bundles D3DMetal 4.0b2, DXMT v0.80-244 |
+| Sikarugir Wine engine | WS12WineSikarugir11.0_1 (Wine 11) | 1 Oct 2026 | needs template 1.0.16+ |
+| Previous engine line | WS12WineSikarugir10.0_8 (Wine 10) | 1 Oct 2026 | fallback |
+| D3DMetal (Apple GPTk) | 4.0 beta 2 | — | bundled in template 1.0.21 |
+| DXMT | v0.80 release (23 Apr 2026); dev builds past it | — | v0.81 / v1.0 not released yet |
+| Gcenx macOS Wine builds | 11.18 | 25 Sep 2026 | standalone; not used directly here |
+| CrossOver | 26.3.0 stable; Preview 20261006 | 21 Jul / 6 Oct 2026 | paid; only needed for the EA App or NotProton |
+| NotProton | 1.0.3 | 6 Oct 2026 | needs paid CrossOver; see NOTPROTON.md |
+
+### Rosetta 2 warning
+
+Apple has said **macOS 27 is the last version with full Rosetta 2**. These Wine engines are
+x86_64 and run through Rosetta, so this whole approach may be affected from macOS 28
+(expected late 2027). Watch for ARM64 Wine builds: CrossOver Preview already has FEX-based
+ARM64 builds, but D3DMetal isn't available on them yet.
 
 ## Primary tools
 
 - Heroic Games Launcher — https://heroicgameslauncher.com · https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher
-  - Mac wiki — https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/wiki/Using-Heroic-on-a-Mac-computer
   - EA on Mac ("CrossOver is the only known working solution") — https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/wiki/EA-Games-on-Mac
 - Sikarugir — https://github.com/Sikarugir-App/Sikarugir
-- Gcenx (Wine / GPTk / DXVK-macOS builds) — https://github.com/Gcenx
-  - game-porting-toolkit — https://github.com/Gcenx/game-porting-toolkit
-  - macOS_Wine_builds — https://github.com/Gcenx/macOS_Wine_builds
-- DXMT (DX10/11 → Metal) — https://github.com/3Shain/dxmt · report site https://dxmt.report
+  - Engines (list + downloads) — https://github.com/Sikarugir-App/Engines
+  - Wrapper templates — https://github.com/Sikarugir-App/Wrapper
+- Gcenx (Wine / GPTk builds) — https://github.com/Gcenx
+- DXMT — https://github.com/3Shain/dxmt
 - Apple Game Porting Toolkit — https://developer.apple.com/games/game-porting-toolkit/
-  - downloads — https://developer.apple.com/download/all/?q=game%20porting%20toolkit
+- NotProton — https://github.com/NotProtonNot/NotProton
 
 ## Compatibility databases
 
-- AppleGamingWiki GPTk guide + game list — https://www.applegamingwiki.com/wiki/Game_Porting_Toolkit
+- AppleGamingWiki — https://www.applegamingwiki.com/wiki/Game_Porting_Toolkit
 - ProtonDB — https://www.protondb.com
 - AreWeAntiCheatYet — https://areweanticheatyet.com
 - CrossOver compatibility — https://www.codeweavers.com/compatibility
 - MacGamingDB — https://macgamingdb.app
-- PCGamingWiki — https://www.pcgamingwiki.com
 
-## Context / history
+## History
 
-- Whisky discontinuation notice — https://docs.getwhisky.app/maintenance-notice
-  (archived May 2025; maintainer recommends CrossOver. Do not use Whisky.)
+- Whisky was archived in May 2025; don't use it — https://docs.getwhisky.app/maintenance-notice
+- The Origin-based EA App workaround stopped working when EA shut Origin down (April 2025) —
+  https://github.com/p0358/Fuck_off_EA_App
 - CrossOver ↔ Wine version map — https://en.wikipedia.org/wiki/CrossOver_(software)
-- `Fuck_off_EA_App` (dead since Origin shutdown, Apr 2025) — https://github.com/p0358/Fuck_off_EA_App
 
-## Community
+## Earlier snapshots
 
-- r/macgaming — https://www.reddit.com/r/macgaming/
-
----
-
-*This snapshot reflects the state of the free Mac Windows-gaming ecosystem as researched
-during the July 2026 session that produced this repo. Re-check the GitHub releases pages
-above for newer versions; DXMT v0.81/v1.0 and a possible GPTk 4.0 beta 2 were the next
-things expected to move.*
+| Date | Engine | Template | D3DMetal | DXMT |
+|---|---|---|---|---|
+| Jun 2026 | Sikarugir 10.0_6 (Wine 10) | 1.0.11 | 4.0b1 (Apple DMG) | v0.74 |
+| Jul 2026 | Sikarugir 10.0_6 | 1.0.11 | 4.0b1 | v0.80 |
+| **Oct 2026** | **Sikarugir 11.0_1 (Wine 11)** | **1.0.21** | **4.0b2** | **v0.80-244** |

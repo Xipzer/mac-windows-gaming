@@ -32,7 +32,7 @@ fetch_lib() {
   else
     SCRIPTS_DIR="$(mktemp -d /tmp/mwg.XXXXXX)"
     local s
-    for s in lib.sh fetch-d3dmetal.sh setup-steam.sh swap-engine.sh update-dxmt.sh check-compat.sh; do
+    for s in lib.sh fetch-d3dmetal.sh setup-steam.sh swap-engine.sh update-wrapper.sh update-dxmt.sh check-compat.sh doctor.sh; do
       curl -fsSL -o "${SCRIPTS_DIR}/${s}" "${RAW_BASE}/scripts/${s}"
       chmod +x "${SCRIPTS_DIR}/${s}"
     done

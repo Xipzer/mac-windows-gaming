@@ -5,7 +5,8 @@ A one-shot installer plus the hard-won knowledge base to get a working gaming
 environment (Steam / Epic / GOG / Amazon) using Apple's **Game Porting Toolkit
 (D3DMetal)** and free, open-source launchers.
 
-> Verified on **macOS 26.5.2 (Tahoe), Apple M4 Max**, July 2026.
+> Verified on **macOS 26.6.2 (Tahoe), Apple M4 Max**, October 2026
+> (Wine 11 engine, wrapper template 1.0.21, D3DMetal 4.0b2).
 > Built from a real, end-to-end troubleshooting session — every fix here was
 > discovered by hitting the wall first.
 
@@ -44,10 +45,11 @@ automates the rest.
 
 ```
 Launcher     Heroic (Epic/GOG/Amazon)   +   Sikarugir (Steam)
-Wine engine  Sikarugir 10  (Wine 10)  ← best: newest Wine, stable Steam webhelper
+Wine engine  Sikarugir 11  (Wine 11)  ← best: newest Wine, stable Steam webhelper
+Template     Sikarugir wrapper 1.0.21 ← bundles D3DMetal 4.0b2 + recent DXMT
 Renderer     D3DMetal (DX11/12)  ·  DXMT (DX10/11)  ·  DXVK (DX10/11 via Vulkan)
              ^ chosen per-game, INDEPENDENT of the Wine engine (a checkbox)
-D3DMetal     Apple GPTk (fetched locally, never redistributed)
+D3DMetal     Apple GPTk (bundled with the template, or your own newer copy)
 ```
 
 Full rationale in **[docs/ENGINES.md](docs/ENGINES.md)**.
@@ -62,7 +64,8 @@ Full rationale in **[docs/ENGINES.md](docs/ENGINES.md)**.
 | `scripts/doctor.sh` | Read-only: report system + what's installed/current. Start here. |
 | `scripts/fetch-d3dmetal.sh` | Fetch **your** Apple D3DMetal locally (DMG or Gcenx brew). |
 | `scripts/setup-steam.sh` | Build/repair the Steam wrapper with all fixes. |
-| `scripts/swap-engine.sh` | Change a wrapper's Wine engine from the CLI. |
+| `scripts/swap-engine.sh` | Change a wrapper's Wine engine (downloads it if needed). |
+| `scripts/update-wrapper.sh` | Update the wrapper template (launcher + bundled renderers). |
 | `scripts/update-dxmt.sh` | Update the DXMT (DX10/11→Metal) layer to latest. |
 | `scripts/check-compat.sh` | Will this game run? Encodes the decision tree. |
 
@@ -71,7 +74,8 @@ Full rationale in **[docs/ENGINES.md](docs/ENGINES.md)**.
 bash scripts/doctor.sh
 bash scripts/check-compat.sh 1790600            # Dragon Ball Sparking! ZERO -> LIKELY WORKS
 bash scripts/check-compat.sh 1774580            # Jedi Survivor -> BLOCKED (EA App)
-bash scripts/swap-engine.sh WS12WineSikarugir10.0_6 Steam
+bash scripts/update-wrapper.sh Steam
+bash scripts/swap-engine.sh WS12WineSikarugir11.0_1 Steam
 ```
 
 ---
@@ -102,9 +106,25 @@ Highlights:
 |---|---|
 | Wrapper keeps re-running the installer | Launch target must be `steam.exe`, not `SteamSetup.exe` (auto-fixed by `setup-steam.sh`) |
 | `Failed to load steamui.dll` | Let Steam self-update; don't block it with `steam.cfg` |
-| `steamwebhelper is not responding` / BMainLoop stalled | Use **Sikarugir 10 (Wine 10)** engine, not GPTk 1.1 |
+| `steamwebhelper is not responding` / BMainLoop stalled | Use the **Sikarugir 11 (Wine 11)** engine, not GPTk 1.1 |
+| `SikarugirSdk.FileUtilsError error 1` at launch | Wrapper template too old for the engine: `scripts/update-wrapper.sh` |
 | `Unexpected Transport Error (0x3008)` | Add `-tcp` launch flag; "VO: Continue Anyway" |
 | EA App `INST-14-1627` | No free fix — EA App needs paid CrossOver |
+
+---
+
+## NotProton (Steam Play for Mac)
+
+[NotProton](https://github.com/NotProtonNot/NotProton) (Sep 2026) lets native Mac Steam run
+Windows games directly, like Proton on Linux. It's open source but **only works with paid
+CrossOver**, so it isn't part of this free stack. An unproven free fork exists. See
+**[docs/NOTPROTON.md](docs/NOTPROTON.md)**.
+
+## Heads-up: Rosetta 2
+
+macOS 27 is the last version with full Rosetta 2. These Wine engines run through Rosetta,
+so this setup may need ARM64 Wine builds from macOS 28 onward.
+See [docs/SOURCES.md](docs/SOURCES.md).
 
 ---
 

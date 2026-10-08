@@ -27,9 +27,9 @@ rm -f "<SteamDir>/steam.cfg"
 
 ### `steamwebhelper is not responding` / `CSteamEngine::BMainLoop appears to have stalled`
 **Cause:** old Wine (GPTk 1.1 / Wine 7) can't run Steam's Chromium (CEF) UI.
-**Fix:** switch to the Wine 10 engine:
+**Fix:** switch to a modern engine:
 ```bash
-bash scripts/swap-engine.sh WS12WineSikarugir10.0_6 Steam
+bash scripts/swap-engine.sh WS12WineSikarugir11.0_1 Steam
 ```
 Then clear caches and relaunch:
 ```bash
@@ -37,6 +37,15 @@ rm -rf "<SteamDir>/config/htmlcache" "<SteamDir>/appcache/httpcache"
 ```
 As a stopgap the dialog's *"Restart Steam with GPU Acceleration disabled"* sometimes
 works, but the real fix is the engine swap.
+
+### `SikarugirSdk.FileUtilsError error 1` — wrapper won't launch after an engine swap
+**Cause:** the wrapper template is too old for the engine. Wine 11 engines need template
+1.0.16+; template 1.0.11 fails like this. Nothing appears, and Steam never starts.
+**Fix:**
+```bash
+bash scripts/update-wrapper.sh Steam
+```
+(`swap-engine.sh` does this automatically when switching to a Wine 11 engine.)
 
 ### `Unexpected Transport Error (0x3008)`
 **Cause:** Steam's content-manager IPC handshake fails under Wine.
