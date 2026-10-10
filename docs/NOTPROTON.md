@@ -56,6 +56,7 @@ Options go **after** `%command%`. `VAR=1 %command%` fails on macOS Steam with `O
 | Option | Effect |
 |---|---|
 | `%command% NOTPROTON_RETINA=0` | Disable Retina for this game (e.g. a tiny windowed launcher) |
+| `%command% NOTPROTON_RETINA=1` | Force Retina when the main screen is 1x (it is off there by default) |
 | `%command% WINEMSYNC=1` | Try msync |
 | `%command% MTL_HUD_ENABLED=1` | Metal performance HUD |
 | `"<repo>/notproton/direct-shipping.sh" %command%` | Dragon Ball Sparking! ZERO: skip the UE launcher stub that spins at 200% CPU |
