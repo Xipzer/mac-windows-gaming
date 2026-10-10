@@ -44,6 +44,9 @@ if [[ -d /Applications/Steam.app ]]; then
   fi
   r="${AS}/notproton/runners/current"
   [[ -x "$r/bin/wine" ]] && ok "runner: $(readlink "$r") ($("$r/bin/wine" --version 2>/dev/null))" || warn "no runner -> scripts/setup-notproton.sh"
+  icd="$r/Resources/vulkan/icd.d/kosmickrisp_mesa_icd.json"
+  lib="$(sed -n 's/.*"library_path": *"\([^"]*\)".*/\1/p' "$icd" 2>/dev/null)"
+  [[ -n "$lib" && -f "$(dirname "$icd")/$lib" ]] && ok "Vulkan driver resolves" || warn "Vulkan driver missing or unresolvable -> scripts/setup-notproton.sh"
   [[ -x "${AS}/Steam/compatibilitytools.d/notproton/run" ]] && ok "compat tool installed" || warn "compat tool missing"
   b="$(grep -m1 -oE '[0-9]{9,}' "${AS}/Steam/Steam.AppBundle/Steam/Contents/MacOS/steam_osx.manifest" 2>/dev/null || true)"
   [[ -n "$b" ]] && log "  Steam client build: $b"
