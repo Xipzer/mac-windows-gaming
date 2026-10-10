@@ -53,12 +53,13 @@ class RunnerEnv(unittest.TestCase):
         write(redist / 'Jun2010_D3DCompiler_43_x86.cab', uncompressed_cab({'D3DCompiler_43.dll': b'newer compiler'}))
         write(redist / 'Jun2010_xinput_x86.cab', uncompressed_cab({'xinput1_3.dll': b'xinput'}))
         self.bin = self.root / 'bin'
-        write(self.bin / 'osascript', '#!/bin/sh\necho "${STUB_SCALE-2}"\n').chmod(0o755)
+        write(self.bin / 'osascript', '#!/bin/sh\ncase "$1" in -l) echo "${STUB_SCALE-2}" ;; '
+              '*) echo "button returned:$STUB_BUTTON" ;; esac\n').chmod(0o755)
 
     def source(self, **env):
         env = {'HOME': str(self.root), 'PATH': f'{self.bin}:/usr/bin:/bin:/usr/sbin:/sbin',
                'CX_ROOT': str(self.runner), 'STEAM_COMPAT_DATA_PATH': str(self.data),
-               'STEAM_COMPAT_INSTALL_PATH': str(self.game), 'WINEDLLOVERRIDES': 'user=b', **env}
+               'STEAM_COMPAT_INSTALL_PATH': str(self.game), 'WINEDLLOVERRIDES': 'user=b', 'NOTPROTON_MIN_FREE_GB': '0', **env}
         show = ''.join(f'echo "{name}=${{{name}-}}"; ' for name in SHOWN)
         out = subprocess.run(['sh', '-c', f'set -e; verb=waitforexitandrun; . "$1"; {show}', 'sh', str(RUNNER_ENV)],
                              env=env, capture_output=True, text=True, check=True).stdout
@@ -92,6 +93,11 @@ class RunnerEnv(unittest.TestCase):
         shutil.rmtree(self.win / 'syswow64')
         self.assertEqual(self.source()['WINEDLLOVERRIDES'], 'user=b')
         self.assertFalse((self.data / 'notproton-directx').exists())
+
+    def test_low_disk_prompt_can_stop_the_launch(self):
+        self.assertEqual(self.source(NOTPROTON_MIN_FREE_GB='999999999', STUB_BUTTON='Not now'), {})
+        self.assertFalse((self.data / 'notproton-directx').exists())
+        self.assertIn('WINEDLLOVERRIDES', self.source(NOTPROTON_MIN_FREE_GB='999999999', STUB_BUTTON='Launch anyway'))
 
 
 if __name__ == '__main__':

@@ -15,6 +15,7 @@ Every fix below was verified on a real setup.
 | Unreal game hangs at 0% CPU after start | msync | Default is `WINEMSYNC=0`; don't force it on |
 | UE launcher stub spins at 200% CPU (Dragon Ball) | Launcher exe never hands off | Launch option `"…/notproton/direct-shipping.sh" %command%` |
 | "Known issues with graphics driver" box (UE) | GPU isn't NVIDIA/AMD | Click OK; don't press Enter on "Yes" (opens NVIDIA's site) |
+| Whole Mac freezes while a big game loads | Disk nearly full, so macOS can't grow swap | Free disk space. A dialog asks before a launch with under 10 GB free (`NOTPROTON_MIN_FREE_GB`) |
 | Launch seems stuck, nothing on screen | Steam EULA / Play dialog hidden behind windows | Bring Steam to front and click it |
 | Mac Steam and the old wrapper Steam both running, high CPU | A `steam://` URL launched the wrapper | Quit the wrapper; use `open -b com.valvesoftware.steam "steam://…"` |
 

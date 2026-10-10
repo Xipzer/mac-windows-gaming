@@ -68,6 +68,7 @@ Options go **after** `%command%`. `VAR=1 %command%` fails on macOS Steam with `O
 | `%command% NOTPROTON_RETINA=1` | Force Retina when the main screen is 1x (it is off there by default) |
 | `%command% WINEMSYNC=1` | Try msync |
 | `%command% MTL_HUD_ENABLED=1` | Metal performance HUD |
+| `%command% NOTPROTON_MIN_FREE_GB=5` | Warn before launch below 5 GB free instead of 10; `0` turns the warning off |
 | `"<repo>/notproton/direct-shipping.sh" %command%` | Dragon Ball Sparking! ZERO: skip the UE launcher stub that spins at 200% CPU |
 
 Tested results (M4 Max, macOS 26.6.2, Oct 2026): [BENCHMARKS.md](BENCHMARKS.md).
