@@ -6,7 +6,7 @@ import unittest
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 RUNNER_ENV = REPO / 'notproton/runner.env'
-SHOWN = ('WINEDLLPATH_D9VK',)
+SHOWN = ('WINEDLLPATH_D9VK', 'NOTPROTON_RETINA')
 
 
 def write(path, data):
@@ -24,7 +24,7 @@ class RunnerEnv(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.root)
         self.runner = self.root / 'runner'
         self.bin = self.root / 'bin'
-        self.bin.mkdir()
+        write(self.bin / 'osascript', '#!/bin/sh\necho "${STUB_SCALE-2}"\n').chmod(0o755)
 
     def source(self, **env):
         env = {'HOME': str(self.root), 'PATH': f'{self.bin}:/usr/bin:/bin:/usr/sbin:/sbin',
@@ -40,6 +40,11 @@ class RunnerEnv(unittest.TestCase):
         self.assertEqual(self.source()['WINEDLLPATH_D9VK'], '', 'no Vulkan driver, so wined3d keeps Direct3D 9')
         write(self.runner / 'Resources/vulkan/icd.d/kosmickrisp_mesa_icd.json', '{}')
         self.assertEqual(self.source()['WINEDLLPATH_D9VK'], str(d9vk))
+
+    def test_retina_follows_the_main_screen_unless_a_launch_option_sets_it(self):
+        self.assertEqual(self.source(STUB_SCALE='1')['NOTPROTON_RETINA'], '0', '1x main screen')
+        self.assertEqual(self.source(STUB_SCALE='2')['NOTPROTON_RETINA'], '', '2x main screen keeps the run script default')
+        self.assertEqual(self.source(STUB_SCALE='1', NOTPROTON_RETINA='1')['NOTPROTON_RETINA'], '1')
 
 
 if __name__ == '__main__':
