@@ -6,6 +6,8 @@ Used by `scripts/setup-notproton.sh`. Background: [../docs/NOTPROTON.md](../docs
 |---|---|
 | `notproton-free.patch` | Changes to `dylib/feats/compat_run.sh` of [Maxyme/NotProton](https://github.com/Maxyme/NotProton) `5b8d186` (runner.env, SIP-proof library path, env forwarding, msync off, Retina default, keep Valve's steamclient64) |
 | `ntdll-sikarugir11.json` | NotProton's `build_module` steamclient detour, pre-built for Sikarugir `WS12WineSikarugir11.0_1` `ntdll.dll` (clean sha256 `654a3911…`, patched `5429ba1f…`) |
+| `ntdll-sikarugir11-i386.json` | The same detour for the i386 `ntdll.dll` (clean sha256 `ae3ce87f…`, patched `e53e7276…`), so 32-bit games reach Steam |
+| `ntdll-i386/` | `build.sh` rebuilds the i386 JSON from Maxyme/NotProton `5b8d186` plus `notproton-i386.patch`, the port to Wine 11 |
 | `apply-ntdll.py` | Applies the JSON to an `ntdll.dll`; refuses any other build |
 | `runner.env` | Environment Sikarugir's launcher sets for Wine 11 + D3DMetal, sourced by the run script |
 | `direct-shipping.sh` | Launch-option wrapper for Dragon Ball Sparking! ZERO (skips the UE launcher stub) |

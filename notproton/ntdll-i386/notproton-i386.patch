@@ -1,0 +1,200 @@
+diff --git a/apply.py b/apply.py
+index f2d526d..65456d2 100644
+--- a/apply.py
++++ b/apply.py
+@@ -6,7 +6,8 @@ import os
+ import sys
+ 
+ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+-from resolve import PE, resolve, shell_vars  # noqa: E402
++from resolve import (IMAGE_SCN_MEM_EXECUTE, SECTION_CHARACTERISTICS_OFFSET,  # noqa: E402
++                     PE, resolve, shell_vars)
+ 
+ DEFAULT_PAYLOAD = {0x8664: "detour2.bin", 0x14c: "detour32.bin", 0xaa64: "detour64-fex.bin"}
+ 
+@@ -33,9 +34,15 @@ def main():
+     d = bytearray(pe.d)
+     cave_off = pe.off(payload_rva)
+ 
++    if len(detour) > int(v['NP_CAVE_ROOM']):
++        raise SystemExit(f"payload is {len(detour)} bytes, the cave holds {v['NP_CAVE_ROOM']}")
+     if any(b != fill for b in d[cave_off:cave_off + len(detour)]):
+         raise SystemExit(f"cave at {cave_off:#x} is not {fill:#02x} pad for {len(detour)} bytes")
+     d[cave_off:cave_off + len(detour)] = detour
++    flags = pe.flags[r['caveSection']]
++    if not flags & IMAGE_SCN_MEM_EXECUTE:
++        at = pe.hdr_off[r['caveSection']] + SECTION_CHARACTERISTICS_OFFSET
++        d[at:at + 4] = (flags | IMAGE_SCN_MEM_EXECUTE).to_bytes(4, 'little')
+ 
+     hooks = []
+     for site in sites:
+@@ -65,7 +72,7 @@ def main():
+ 
+     print(f"patched {src} -> {dst}")
+     print(f"  payload {os.path.basename(payload_path)}, {len(detour)} bytes at rva "
+-          f"{payload_rva:#x} (off {cave_off:#x}), cave pad {fill:#02x}")
++          f"{payload_rva:#x} (off {cave_off:#x}) in {r['caveSection']}, cave pad {fill:#02x}")
+     for site, bm_off, rel, stolen in hooks:
+         print(f"  hook {site['hookRVA']:#x} (off {bm_off:#x}) branch rel {rel:#x} to cave "
+               f"entry, stolen {stolen.hex()}")
+diff --git a/build32.sh b/build32.sh
+index dde8717..fff21df 100755
+--- a/build32.sh
++++ b/build32.sh
+@@ -19,6 +19,12 @@ OBJCOPY=i686-w64-mingw32-objcopy
+ CFLAGS="-Os -fno-asynchronous-unwind-tables -ffreestanding -fno-stack-protector \
+ -fno-ident -mno-stack-arg-probe"
+ 
++# Stock Wine 11 gates imports on DONT_RESOLVE_DLL_REFERENCES (0x1) in build_module's
++# flags argument and keeps LDR_DONT_RESOLVE_REFS at 0x40000000 in the MODREF.
++case "${NP_GATE_BIT:-0x2}" in
++  0x1) CFLAGS="$CFLAGS -DARG_DONT_RESOLVE=0x1 -DLDR_DONT_RESOLVE_REFS=0x40000000" ;;
++esac
++
+ # shellcheck disable=SC2086 # CFLAGS carries several flags and has to split
+ "$CC" -c $CFLAGS detour32.c -o detour32_c.o \
+   "-DFLAGS_SLOT=$NP_FLAGS_SLOT" "-DLOAD_PATH_SLOT=$NP_LOAD_PATH"
+diff --git a/detour32.c b/detour32.c
+index 24f66b8..b0a10d1 100644
+--- a/detour32.c
++++ b/detour32.c
+@@ -58,8 +58,13 @@ struct io_status { u32 status; u32 information; };
+ #define WM_BASENAME(wm)  (*(const u16 **)((u8 *)(wm) + 0x30))
+ #define WM_FLAGS(wm)     ( (u32 *)((u8 *)(wm) + 0x34))
+ 
++#ifndef LDR_DONT_RESOLVE_REFS
+ #define LDR_DONT_RESOLVE_REFS  0x00000002
++#endif
+ #define LDR_DONT_CALL_DLLMAIN  0x20000000
++#ifndef ARG_DONT_RESOLVE
++#define ARG_DONT_RESOLVE LDR_DONT_RESOLVE_REFS
++#endif
+ 
+ static const u16 name_lsteam[] = {'l','s','t','e','a','m','c','l','i','e','n','t','.','d','l','l',0};
+ 
+@@ -253,7 +258,7 @@ void detour_build_module32(struct ctx *c, void *wm, void *fp)
+     if (is_steamclient32)
+     {
+         *WM_FLAGS(wm)  |= LDR_DONT_RESOLVE_REFS;
+-        *ARG_FLAGS(fp) |= LDR_DONT_RESOLVE_REFS;
++        *ARG_FLAGS(fp) |= ARG_DONT_RESOLVE;
+         restore_image_base(c, wm, sc);
+     }
+     else
+diff --git a/link32.ld b/link32.ld
+index 192a2a2..7db7dfc 100644
+--- a/link32.ld
++++ b/link32.ld
+@@ -1,4 +1,3 @@
+-// i386 ntdll.dll cave layout, link time only
+ SECTIONS {
+   . = CAVE_VA;
+   .cave : SUBALIGN(1) {
+diff --git a/resolve.py b/resolve.py
+index ea1fa38..5ff147b 100755
+--- a/resolve.py
++++ b/resolve.py
+@@ -7,6 +7,10 @@ from capstone import x86 as X86, arm64 as A64
+ ARCH = {0x8664: 'x86_64-windows', 0x14c: 'i386-windows', 0xaa64: 'aarch64-windows'}
+ 
+ PAYLOAD = {0x8664: 864, 0x14c: 1376, 0xaa64: 868}  # detour2.bin, detour32.bin, detour64-fex.bin
++SECTION_CHARACTERISTICS_OFFSET = 36
++IMAGE_SCN_MEM_DISCARDABLE = 0x02000000
++IMAGE_SCN_MEM_EXECUTE = 0x20000000
++IMAGE_SCN_MEM_WRITE = 0x80000000
+ 
+ # Keyed by input sha256 so the comparison only runs against the build the tree pins, so a
+ # new build will report derived values rather than a wall of expected mismatches
+@@ -73,13 +77,18 @@ class PE:
+         wide = self.magic == 0x20b
+         self.imagebase = (struct.unpack_from('<Q', self.d, self.opt + 24)[0] if wide
+                           else struct.unpack_from('<I', self.d, self.opt + 28)[0])
++        self.salign = struct.unpack_from('<I', self.d, self.opt + 32)[0]
+         self.secs = []
++        self.hdr_off = {}
++        self.flags = {}
+         for i in range(nsec):
+             o = e + 24 + optsz + i * 40
+             name = self.d[o:o + 8].rstrip(b'\0').decode('latin1')
+             vsize, vrva, rsize, roff = struct.unpack_from('<IIII', self.d, o + 8)
+             if roff:
+                 self.secs.append((name, vrva, vsize, roff, rsize))
++                self.hdr_off[name] = o
++                self.flags[name] = struct.unpack_from('<I', self.d, o + SECTION_CHARACTERISTICS_OFFSET)[0]
+         self.dirs = self.opt + (112 if wide else 96)
+ 
+     def sec(self, prefix):
+@@ -134,9 +143,17 @@ class PE:
+     def cave(self):
+         # PE sections are padded out to the file alignment, so there's dead space
+         # at the end that the loader maps but nothing touches. Detour goes there.
+-        _, vrva, vsize, roff, rsize = self.sec('.text')
+-        end = vrva + vsize
+-        return {'caveRVA': end, 'caveSize': (vrva + rsize) - end, 'fill': self.d[roff + vsize]}
++        def tail(s):
++            name, vrva, vsize, roff, rsize = s
++            mapped = -(-vsize // self.salign) * self.salign
++            return {'caveRVA': vrva + vsize, 'caveSize': max(min(rsize, mapped) - vsize, 0),
++                    'fill': self.d[roff + vsize] if rsize > vsize else 0, 'caveSection': name}
++        text = tail(self.sec('.text'))
++        if payload_slot(text)[1] >= PAYLOAD[self.machine]:
++            return text
++        ro = [tail(s) for s in self.secs
++              if not self.flags[s[0]] & (IMAGE_SCN_MEM_DISCARDABLE | IMAGE_SCN_MEM_WRITE)]
++        return max(ro, key=lambda t: t['caveSize'])
+ 
+     def string_refs(self, name):
+         """RVAs of instructions referencing a .rdata C string, however the arch addresses it."""
+@@ -285,7 +302,7 @@ def resolve_i386(pe):
+     for k in range(anchor - 1, max(anchor - 24, 0), -1):
+         i = body[k]
+         if i.mnemonic == 'test' and i.operands and i.operands[-1].type == X86.X86_OP_IMM \
+-                and i.operands[-1].imm == 2:
++                and i.operands[-1].imm in (1, 2):
+             gate = k
+             break
+     if gate is None:
+@@ -341,7 +358,7 @@ def resolve_i386(pe):
+             'insn': ' ; '.join(f"{i.mnemonic} {i.op_str}" for i in taken),
+             'load_path': load_path, 'skip': skip, 'stole_branch': stole_branch,
+             'stolen_head': b''.join(i.bytes for i in (taken[:-1] if stole_branch else taken)).hex(),
+-            'flags_slot': flags_slot}
++            'flags_slot': flags_slot, 'gate_bit': body[gate].operands[-1].imm}
+ 
+ 
+ def aarch64_walk(md, text, tv):
+@@ -636,11 +653,15 @@ def ntdlls(arg):
+     raise SystemExit(f"{arg}: no <arch>-windows/ntdll.dll under it")
+ 
+ 
++def payload_slot(cave):
++    payload = (cave['caveRVA'] + 15) & ~15
++    return payload, cave['caveSize'] - (payload - cave['caveRVA'])
++
++
+ def shell_vars(path):
+     """Everything build.sh and apply.py need for one ntdll, as shell assignments."""
+     r = resolve(path)
+-    payload = (r['caveRVA'] + 15) & ~15
+-    room = r['caveSize'] - (payload - r['caveRVA'])
++    payload, room = payload_slot(r)
+     need = PAYLOAD[r['machine']]
+     if room < need:
+         raise SystemExit(f"{path}: cave has {room} bytes at {payload:#x}, payload needs {need}")
+@@ -658,6 +679,7 @@ def shell_vars(path):
+         'NP_CAVE_RVA': f"{r['caveRVA']:#x}", 'NP_CAVE_SIZE': str(r['caveSize']),
+         'NP_PAYLOAD_RVA': f"{payload:#x}", 'NP_PAYLOAD_VA': f"{r['imageBase'] + payload:#x}",
+         'NP_CAVE_ROOM': str(room), 'NP_FILL': f"{r['fill']:#04x}",
++        'NP_CAVE_SECTION': r['caveSection'],
+     }
+     if PINNED.get(r['sha256'], {}).get('payload'):
+         out['NP_PAYLOAD_SHA256'] = PINNED[r['sha256']]['payload']
+@@ -667,6 +689,8 @@ def shell_vars(path):
+         out['NP_STOLEN_HEAD_BYTES'] = ','.join(
+             f"0x{b:02x}" for b in bytes.fromhex(r['stolen_head']))
+         out['NP_FLAGS_SLOT'] = ('%#x' if r['flags_slot'] >= 0 else '-%#x') % abs(r['flags_slot'])
++        if r.get('gate_bit') is not None:
++            out['NP_GATE_BIT'] = f"{r['gate_bit']:#x}"
+ 
+     for n, s in enumerate(r.get('sites') or [], 1):
+         out[f'NP_HOOK_RVA_{n}'] = f"{s['hookRVA']:#x}"
