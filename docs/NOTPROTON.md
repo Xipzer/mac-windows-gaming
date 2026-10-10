@@ -21,7 +21,7 @@ achievements and the overlay all go through the one Mac Steam.
 | Wine 11 runner | Sikarugir engine `WS12WineSikarugir11.0_1` + Template 1.0.21 `Frameworks` (D3DMetal 4.0b2, DXMT, MoltenVK, GStreamer) | `~/Library/Application Support/notproton/runners/sikarugir-11` |
 | Runner environment | [`notproton/runner.env`](../notproton/runner.env) (mirrors Sikarugir's launcher) | `<runner>/runner.env` |
 | Steam bridge | `lsteamclient` + `steam.exe` from the NotProton v1.0.1 release; Valve's `steamclient`/`tier0`/`vstdlib` from Valve's CDN (hash-checked) | `~/Library/Application Support/notproton/bridge` |
-| ntdll detour | [`notproton/ntdll-sikarugir11.json`](../notproton/ntdll-sikarugir11.json) applied by `apply-ntdll.py` | runner + bridge `ntdll.dll` |
+| ntdll detour | [`notproton/ntdll-sikarugir11.json`](../notproton/ntdll-sikarugir11.json) (64-bit) and [`ntdll-sikarugir11-i386.json`](../notproton/ntdll-sikarugir11-i386.json) (32-bit), applied by `apply-ntdll.py` | runner + bridge `ntdll.dll` |
 | Compat tool | "NotProton (free, Wine 11)", default for all Windows games | `~/Library/Application Support/Steam/compatibilitytools.d/notproton` |
 
 - Every download is pinned by SHA-256.
@@ -48,6 +48,7 @@ All in `notproton-free.patch`, applied to the fork's `dylib/feats/compat_run.sh`
 - **Ours:** built for Sikarugir Wine 11's `ntdll.dll` with upstream's `ntdll-patch/resolve.py`, using `NP_FORCE_LOAD_PATH=0x58` (that build keeps `load_path` at `rsp+0x58`).
 - **Result:** 4 byte ranges (870 bytes) stored as JSON; hook at `0x34fc2`, payload at RVA `0x704a0`.
 - **Safety:** `apply-ntdll.py` refuses any `ntdll.dll` whose hash doesn't match, so it can't patch a different engine.
+- **32-bit:** Wine 11's i386 `build_module` gates on `DONT_RESOLVE_DLL_REFERENCES` (`0x1`), not the bit upstream's resolver expects, and the detour no longer fits in the `.text` padding. [`notproton/ntdll-i386/notproton-i386.patch`](../notproton/ntdll-i386/notproton-i386.patch) ports `detour32.c` and puts the payload in the `.rsrc` tail. `notproton/ntdll-i386/build.sh` rebuilds `ntdll-sikarugir11-i386.json` byte for byte (needs `brew install mingw-w64`).
 
 ## Per-game launch options
 
@@ -65,7 +66,7 @@ Tested results (M4 Max, macOS 26.6.2, Oct 2026): [BENCHMARKS.md](BENCHMARKS.md).
 ## Limits
 
 - **Steam client updates can break it.** The dylib matches Steam builds by signature. Re-run `scripts/setup-notproton.sh --skip-build` to pull the newest signatures. Steam → Settings → "Block Steam client updates" avoids surprises.
-- **32-bit games:** untested. The i386 `ntdll.dll` isn't patched (`resolve.py` finds no gate).
+- **32-bit games:** reach Steam through the i386 detour (Skyrim, Scribblenauts Unlimited).
 - **Kernel anti-cheat and EA App games** still don't work ([COMPATIBILITY.md](COMPATIBILITY.md)).
 - First launch of a game builds its prefix (~30 s). Steam's EULA and "Play" dialogs can hide behind other windows; click Steam if a launch seems stuck.
 
