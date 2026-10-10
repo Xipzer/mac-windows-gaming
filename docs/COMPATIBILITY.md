@@ -36,11 +36,16 @@ bash scripts/check-compat.sh --name "Game Name" # best-effort by name
 | Sonic Frontiers | 1237320 | 11 | ✅ Plays | No anti-cheat. |
 | LEGO Star Wars: Skywalker Saga | 920210 | 11/12 | ✅ Plays | - |
 | Batman: Arkham Knight | 208650 | 11 | ✅ Plays | Heavy DX11. High: avg 92 fps at 1800×1169 ([BENCHMARKS.md](BENCHMARKS.md)). |
+| The Elder Scrolls V: Skyrim | 72850 | 9 | ✅ Plays | 32-bit: needs the i386 ntdll detour and DXVK for Direct3D 9. Retina off on a 1x main screen. |
+| Scribblenauts Unlimited | 218680 | 9 | ✅ Plays | 32-bit: needs the i386 ntdll detour and the game's own `d3dx9` ([NOTPROTON.md](NOTPROTON.md#directx-redistributables)). |
+| Megabonk | 3405340 | - | ✅ Plays | - |
+| Shape of Dreams | 2444750 | - | ✅ Plays | Froze the whole Mac once with about 2 GB of disk free; fine with 28 GB free. |
 | Star Wars Jedi: Survivor | 1774580 | 12 | ❌ Blocked (free) | EA App required (`INST-14-1627`). Denuvo removed 2024; not the blocker. CrossOver only. |
 | Need for Speed Heat | 1222680 | 11 | ❌ Blocked (free) | EA App required. |
 | Counter-Strike 2 | 730 | 11 | ❌ Blocked | VAC/kernel anti-cheat. |
 
 First pass July 2026 (Sonic, LEGO rated "likely works", Arkham Knight "tune settings"); play results October 2026 on NotProton.
+Skyrim, Scribblenauts Unlimited, Megabonk and Shape of Dreams: October 2026 on an M2 Pro, macOS 27.0.1.
 Native ports (run in Mac Steam, not through Wine): Valheim, Batman: Arkham City, Shadow of Mordor, Tomb Raider (2013). See [NATIVE-VS-WRAPPER.md](NATIVE-VS-WRAPPER.md).
 
 ## Where to verify

@@ -21,7 +21,7 @@ achievements and the overlay all go through the one Mac Steam.
 | Wine 11 runner | Sikarugir engine `WS12WineSikarugir11.0_1` + Template 1.0.21 `Frameworks` (D3DMetal 4.0b2, DXMT, MoltenVK, GStreamer) | `~/Library/Application Support/notproton/runners/sikarugir-11` |
 | Runner environment | [`notproton/runner.env`](../notproton/runner.env) (mirrors Sikarugir's launcher) | `<runner>/runner.env` |
 | Steam bridge | `lsteamclient` + `steam.exe` from the NotProton v1.0.1 release; Valve's `steamclient`/`tier0`/`vstdlib` from Valve's CDN (hash-checked) | `~/Library/Application Support/notproton/bridge` |
-| ntdll detour | [`notproton/ntdll-sikarugir11.json`](../notproton/ntdll-sikarugir11.json) applied by `apply-ntdll.py` | runner + bridge `ntdll.dll` |
+| ntdll detour | [`notproton/ntdll-sikarugir11.json`](../notproton/ntdll-sikarugir11.json) (64-bit) and [`ntdll-sikarugir11-i386.json`](../notproton/ntdll-sikarugir11-i386.json) (32-bit), applied by `apply-ntdll.py` | runner + bridge `ntdll.dll` |
 | Compat tool | "NotProton (free, Wine 11)", default for all Windows games | `~/Library/Application Support/Steam/compatibilitytools.d/notproton` |
 
 - Every download is pinned by SHA-256.
@@ -48,6 +48,16 @@ All in `notproton-free.patch`, applied to the fork's `dylib/feats/compat_run.sh`
 - **Ours:** built for Sikarugir Wine 11's `ntdll.dll` with upstream's `ntdll-patch/resolve.py`, using `NP_FORCE_LOAD_PATH=0x58` (that build keeps `load_path` at `rsp+0x58`).
 - **Result:** 4 byte ranges (870 bytes) stored as JSON; hook at `0x34fc2`, payload at RVA `0x704a0`.
 - **Safety:** `apply-ntdll.py` refuses any `ntdll.dll` whose hash doesn't match, so it can't patch a different engine.
+- **32-bit:** Wine 11's i386 `build_module` gates on `DONT_RESOLVE_DLL_REFERENCES` (`0x1`), not the bit upstream's resolver expects, and the detour no longer fits in the `.text` padding. [`notproton/ntdll-i386/notproton-i386.patch`](../notproton/ntdll-i386/notproton-i386.patch) ports `detour32.c` and puts the payload in the `.rsrc` tail. `notproton/ntdll-i386/build.sh` rebuilds `ntdll-sikarugir11-i386.json` byte for byte (needs `brew install mingw-w64`).
+
+## DirectX redistributables
+
+Steam's DirectX install step never runs under NotProton. Scribblenauts Unlimited crashes on Wine's own `d3dx9` effects and plays with the real DLLs.
+
+- On launch, `runner.env` unpacks the native `d3dx9_*` and `d3dcompiler_*` DLLs from the game's own redist `.cab` files into its prefix, and prefers them (`n,b`).
+- Only Wine's built-in copies are replaced; the originals stay beside them as `*.notproton-orig`.
+- It runs once per prefix and records the DLLs in `compatdata/<appid>/notproton-directx`. Delete that file to redo it.
+- The prefix has to exist first, so a game without a Steam install script gets them on its second launch.
 
 ## Per-game launch options
 
@@ -56,8 +66,10 @@ Options go **after** `%command%`. `VAR=1 %command%` fails on macOS Steam with `O
 | Option | Effect |
 |---|---|
 | `%command% NOTPROTON_RETINA=0` | Disable Retina for this game (e.g. a tiny windowed launcher) |
+| `%command% NOTPROTON_RETINA=1` | Force Retina when the main screen is 1x (it is off there by default) |
 | `%command% WINEMSYNC=1` | Try msync |
 | `%command% MTL_HUD_ENABLED=1` | Metal performance HUD |
+| `%command% NOTPROTON_MIN_FREE_GB=5` | Warn before launch below 5 GB free instead of 10; `0` turns the warning off |
 | `"<repo>/notproton/direct-shipping.sh" %command%` | Dragon Ball Sparking! ZERO: skip the UE launcher stub that spins at 200% CPU |
 
 Tested results (M4 Max, macOS 26.6.2, Oct 2026): [BENCHMARKS.md](BENCHMARKS.md).
@@ -65,7 +77,7 @@ Tested results (M4 Max, macOS 26.6.2, Oct 2026): [BENCHMARKS.md](BENCHMARKS.md).
 ## Limits
 
 - **Steam client updates can break it.** The dylib matches Steam builds by signature. Re-run `scripts/setup-notproton.sh --skip-build` to pull the newest signatures. Steam → Settings → "Block Steam client updates" avoids surprises.
-- **32-bit games:** untested. The i386 `ntdll.dll` isn't patched (`resolve.py` finds no gate).
+- **32-bit games:** reach Steam through the i386 detour (Skyrim, Scribblenauts Unlimited).
 - **Kernel anti-cheat and EA App games** still don't work ([COMPATIBILITY.md](COMPATIBILITY.md)).
 - First launch of a game builds its prefix (~30 s). Steam's EULA and "Play" dialogs can hide behind other windows; click Steam if a launch seems stuck.
 

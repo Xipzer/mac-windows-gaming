@@ -50,7 +50,7 @@ Mac Steam (/Applications/Steam.app)
               └─ D3DMetal 4.0b2 (DX11/12) · DXMT · MoltenVK   from Sikarugir template 1.0.21
 ```
 
-- Retina is on by default, so games can use the panel's real resolution (3024×1964 on a 14" MacBook Pro), not the scaled 1800×1169.
+- Retina is on by default when the main screen is a Retina screen, so games can use the panel's real resolution (3024×1964 on a 14" MacBook Pro), not the scaled 1800×1169. On a 1x main screen it stays off, because Wine scales every screen by one factor.
 - How it works and what the fork changes: [docs/NOTPROTON.md](docs/NOTPROTON.md). Engines and renderers: [docs/ENGINES.md](docs/ENGINES.md).
 
 ## Scripts

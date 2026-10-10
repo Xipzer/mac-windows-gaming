@@ -44,7 +44,13 @@ if [[ -d /Applications/Steam.app ]]; then
   fi
   r="${AS}/notproton/runners/current"
   [[ -x "$r/bin/wine" ]] && ok "runner: $(readlink "$r") ($("$r/bin/wine" --version 2>/dev/null))" || warn "no runner -> scripts/setup-notproton.sh"
+  icd="$r/Resources/vulkan/icd.d/kosmickrisp_mesa_icd.json"
+  lib="$(sed -n 's/.*"library_path": *"\([^"]*\)".*/\1/p' "$icd" 2>/dev/null)"
+  [[ -n "$lib" && -f "$(dirname "$icd")/$lib" ]] && ok "Vulkan driver resolves" || warn "Vulkan driver missing or unresolvable -> scripts/setup-notproton.sh"
   [[ -x "${AS}/Steam/compatibilitytools.d/notproton/run" ]] && ok "compat tool installed" || warn "compat tool missing"
+  nt32="$r/lib/wine/i386-windows/ntdll.dll"
+  want="$(sed -n 's/.*"patched_sha256": *"\([^"]*\)".*/\1/p' "${HERE}/../notproton/ntdll-sikarugir11-i386.json")"
+  [[ -f "$nt32" && "$(shasum -a 256 "$nt32" | cut -d' ' -f1)" == "$want" ]] && ok "32-bit ntdll patched" || warn "32-bit ntdll not patched, 32-bit games can't reach Steam -> scripts/setup-notproton.sh"
   b="$(grep -m1 -oE '[0-9]{9,}' "${AS}/Steam/Steam.AppBundle/Steam/Contents/MacOS/steam_osx.manifest" 2>/dev/null || true)"
   [[ -n "$b" ]] && log "  Steam client build: $b"
   log "  Steam signatures known: $(find "${AS}/notproton/signatures/macos.arm64" -name '*.json' 2>/dev/null | wc -l | tr -d ' ')"

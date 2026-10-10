@@ -34,7 +34,7 @@ How to set up or repair free Windows gaming on Apple Silicon macOS with this rep
 | What | Path |
 |---|---|
 | Fork | Maxyme/NotProton `5b8d186` + `notproton/notproton-free.patch` ([docs/NOTPROTON.md](docs/NOTPROTON.md)) |
-| ntdll detour | `notproton/ntdll-sikarugir11.json` |
+| ntdll detour | `notproton/ntdll-sikarugir11.json` (64-bit), `notproton/ntdll-sikarugir11-i386.json` (32-bit) |
 | Runner | `~/Library/Application Support/notproton/runners/sikarugir-11` (`current` symlink) |
 | Bridge | `~/Library/Application Support/notproton/bridge` |
 | Build tree | `~/Library/Caches/notproton-free/src` (no spaces: the fork's Makefile can't handle them) |
