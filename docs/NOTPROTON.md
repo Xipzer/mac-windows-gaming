@@ -49,6 +49,15 @@ All in `notproton-free.patch`, applied to the fork's `dylib/feats/compat_run.sh`
 - **Result:** 4 byte ranges (870 bytes) stored as JSON; hook at `0x34fc2`, payload at RVA `0x704a0`.
 - **Safety:** `apply-ntdll.py` refuses any `ntdll.dll` whose hash doesn't match, so it can't patch a different engine.
 
+## DirectX redistributables
+
+Steam's DirectX install step never runs under NotProton. Scribblenauts Unlimited crashes on Wine's own `d3dx9` effects and plays with the real DLLs.
+
+- On launch, `runner.env` unpacks the native `d3dx9_*` and `d3dcompiler_*` DLLs from the game's own redist `.cab` files into its prefix, and prefers them (`n,b`).
+- Only Wine's built-in copies are replaced; the originals stay beside them as `*.notproton-orig`.
+- It runs once per prefix and records the DLLs in `compatdata/<appid>/notproton-directx`. Delete that file to redo it.
+- The prefix has to exist first, so a game without a Steam install script gets them on its second launch.
+
 ## Per-game launch options
 
 Options go **after** `%command%`. `VAR=1 %command%` fails on macOS Steam with `OS Error 260`.
@@ -56,6 +65,7 @@ Options go **after** `%command%`. `VAR=1 %command%` fails on macOS Steam with `O
 | Option | Effect |
 |---|---|
 | `%command% NOTPROTON_RETINA=0` | Disable Retina for this game (e.g. a tiny windowed launcher) |
+| `%command% NOTPROTON_RETINA=1` | Force Retina when the main screen is 1x (it is off there by default) |
 | `%command% WINEMSYNC=1` | Try msync |
 | `%command% MTL_HUD_ENABLED=1` | Metal performance HUD |
 | `"<repo>/notproton/direct-shipping.sh" %command%` | Dragon Ball Sparking! ZERO: skip the UE launcher stub that spins at 200% CPU |
