@@ -9,11 +9,13 @@ Every fix below was verified on a real setup.
 | Games stop launching after a Steam client update | dylib signatures don't match the new Steam build | `scripts/setup-notproton.sh --skip-build`; consider Steam → Settings → block client updates |
 | `Application load error 3:0000065432` | Steam DRM found lsteamclient in place of Valve's `steamclient64.dll` | Re-run `setup-notproton.sh` (restores Valve's DLL + ntdll detour). If it persists, delete the game's `pfx/drive_c/windows/system32/steamclient64.dll` |
 | Game's own dialog is a blank box; log says `Wine cannot find the FreeType font library` | SIP strips `DYLD_*` from the `/bin/sh` launcher, so Wine loses the runner's libraries | Fixed in the patch (path baked into the launcher). Re-run `setup-notproton.sh` |
-| Every game capped at 1800×1169 (your "looks like" size) | Wine Retina mode off | On by default; check you didn't pass `NOTPROTON_RETINA=0`. Force per game: `%command% NOTPROTON_RETINA=1` |
+| Every game capped at 1800×1169 (your "looks like" size) | Wine Retina mode off | On by default on a Retina main screen; check you didn't pass `NOTPROTON_RETINA=0`. Force per game: `%command% NOTPROTON_RETINA=1` |
+| Game on a 1x external monitor reports twice the monitor's size | Retina on, and Wine applies one scale factor to every screen | Off by default when the main screen is 1x; don't force `NOTPROTON_RETINA=1` there |
 | `Failed to spawn process` / `OS Error 260` / launch option ignored | Launch option written as `VAR=1 %command%` | Write `%command% VAR=1` |
 | Unreal game hangs at 0% CPU after start | msync | Default is `WINEMSYNC=0`; don't force it on |
 | UE launcher stub spins at 200% CPU (Dragon Ball) | Launcher exe never hands off | Launch option `"…/notproton/direct-shipping.sh" %command%` |
 | "Known issues with graphics driver" box (UE) | GPU isn't NVIDIA/AMD | Click OK; don't press Enter on "Yes" (opens NVIDIA's site) |
+| Whole Mac freezes while a big game loads | Disk nearly full, so macOS can't grow swap | Free disk space. A dialog asks before a launch with under 10 GB free (`NOTPROTON_MIN_FREE_GB`) |
 | Launch seems stuck, nothing on screen | Steam EULA / Play dialog hidden behind windows | Bring Steam to front and click it |
 | Mac Steam and the old wrapper Steam both running, high CPU | A `steam://` URL launched the wrapper | Quit the wrapper; use `open -b com.valvesoftware.steam "steam://…"` |
 

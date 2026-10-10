@@ -152,8 +152,12 @@ if (( FORCE )) || [[ ! -x "$RUNNER/bin/wine" ]]; then
   rm -rf "$RUNNER"; mkdir -p "$RUNNER"
   ditto "$tmp/wswine.bundle" "$RUNNER"
   ditto "$T/Frameworks" "$RUNNER/Frameworks"
-  [[ -d "$T/Resources/vulkan" ]] && ditto "$T/Resources/vulkan" "$RUNNER/vulkan"
+  [[ -d "$T/Resources/vulkan" ]] && ditto "$T/Resources/vulkan" "$RUNNER/Resources/vulkan"
   ok "Runner: $("$RUNNER/bin/wine" --version 2>/dev/null) + Template-${TEMPLATE} libraries"
+fi
+# The Vulkan ICD manifests point at ../../../Frameworks, which only resolves from Resources/vulkan.
+if [[ -d "$RUNNER/vulkan" && ! -d "$RUNNER/Resources/vulkan" ]]; then
+  mkdir -p "$RUNNER/Resources"; mv "$RUNNER/vulkan" "$RUNNER/Resources/vulkan"
 fi
 cp -f "$REPO/notproton/runner.env" "$RUNNER/runner.env"
 ln -sfn sikarugir-11 "$NP/runners/current"
