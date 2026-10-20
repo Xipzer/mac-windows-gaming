@@ -17,7 +17,7 @@ achievements and the overlay all go through the one Mac Steam.
 
 | Piece | Source | Where |
 |---|---|---|
-| `notproton.dylib` | [Maxyme/NotProton `standalone-steam-gptk4`](https://github.com/Maxyme/NotProton/tree/standalone-steam-gptk4) @ `5b8d186` + [`notproton/notproton-free.patch`](../notproton/notproton-free.patch) | injected into `/Applications/Steam.app` |
+| `notproton.dylib` | [NotProton PR #18 (standalone-steam-gptk4)](https://github.com/NotProtonNot/NotProton/pull/18) @ `5b8d186` + [`notproton/notproton-free.patch`](../notproton/notproton-free.patch) | injected into `/Applications/Steam.app` |
 | Wine 11 runner | Sikarugir engine `WS12WineSikarugir11.0_1` + Template 1.0.21 `Frameworks` (D3DMetal 4.0b2, DXMT, MoltenVK, GStreamer) | `~/Library/Application Support/notproton/runners/sikarugir-11` |
 | Runner environment | [`notproton/runner.env`](../notproton/runner.env) (mirrors Sikarugir's launcher) | `<runner>/runner.env` |
 | Steam bridge | `lsteamclient` + `steam.exe` from the NotProton v1.0.1 release; Valve's `steamclient`/`tier0`/`vstdlib` from Valve's CDN (hash-checked) | `~/Library/Application Support/notproton/bridge` |

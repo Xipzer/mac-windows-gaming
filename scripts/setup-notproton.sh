@@ -5,7 +5,7 @@
 # No Windows-Steam wrapper, no CrossOver licence.
 #
 # Pieces (all pinned + checksummed, all free):
-#   NotProton fork  Maxyme/NotProton @ standalone-steam-gptk4 (GPL-3.0) + notproton/notproton-free.patch
+#   NotProton fork  NotProton PR #18 (standalone-steam-gptk4) (GPL-3.0) + notproton/notproton-free.patch
 #   Wine engine     Sikarugir WS12WineSikarugir11.0_1 (Wine 11)
 #   Libraries       Sikarugir Template-1.0.21 Frameworks (D3DMetal 4.0b2, DXMT, MoltenVK, GStreamer)
 #   Steam bridge    lsteamclient + steam.exe from the NotProton v1.0.1 release, Valve DLLs from Valve's CDN
@@ -26,7 +26,9 @@ REPO="$(cd "$HERE/.." && pwd)"
 source "${HERE}/lib.sh"
 
 # ---- pins -------------------------------------------------------------------
-FORK_URL="https://github.com/Maxyme/NotProton.git"
+# The original fork repo was deleted; upstream keeps its commits as closed PR #18.
+FORK_URL="https://github.com/NotProtonNot/NotProton.git"
+FORK_REF="pull/18/head"
 FORK_COMMIT="5b8d18683b619b66390be8cbcffc1fbf47e45971"
 DOBBY_URL="https://github.com/jmpews/Dobby.git"
 DOBBY_COMMIT="5dfc8546954ce3b3198132ab13fddb89ee92cdd7"
@@ -117,7 +119,8 @@ quit_steam
 if (( ! SKIP_BUILD )); then
   info "Building the free NotProton fork"
   if (( FORCE )) || [[ "$(git -C "$SRC" rev-parse HEAD 2>/dev/null)" != "$FORK_COMMIT" ]]; then
-    rm -rf "$SRC"; git clone -q "$FORK_URL" "$SRC"; git -C "$SRC" checkout -q "$FORK_COMMIT"
+    rm -rf "$SRC"; git init -q "$SRC"; git -C "$SRC" remote add origin "$FORK_URL"
+    git -C "$SRC" fetch -q --depth 1 origin "$FORK_REF"; git -C "$SRC" checkout -q "$FORK_COMMIT"
   fi
   git -C "$SRC" checkout -q -- dylib/feats/compat_run.sh
   git -C "$SRC" apply "$REPO/notproton/notproton-free.patch"

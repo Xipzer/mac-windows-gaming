@@ -5,7 +5,7 @@
 | Component | Version | Date | Notes |
 |---|---|---|---|
 | macOS | 26.6.2 (Tahoe) | - | Tested on Apple M4 Max. macOS 27 released 14 Sep 2026 |
-| NotProton | 1.0.3 upstream (CrossOver-only); free fork Maxyme `5b8d186` + our patch | 6 Oct 2026 | default Steam route; see [NOTPROTON.md](NOTPROTON.md) |
+| NotProton | 1.0.3 upstream (CrossOver-only); free fork (PR #18) `5b8d186` + our patch | 6 Oct 2026 | default Steam route; see [NOTPROTON.md](NOTPROTON.md) |
 | Sikarugir Wine engine | WS12WineSikarugir11.0_1 (Wine 11) | 1 Oct 2026 | needs template 1.0.16+ |
 | Previous engine line | WS12WineSikarugir10.0_8 (Wine 10) | 1 Oct 2026 | fallback |
 | Sikarugir wrapper template | 1.0.21 | 1 Oct 2026 | bundles D3DMetal 4.0b2, DXMT v0.80-244 |
@@ -33,7 +33,7 @@
 ## Tools
 
 - NotProton - https://github.com/NotProtonNot/NotProton
-- Free NotProton fork (standalone-steam-gptk4) - https://github.com/Maxyme/NotProton/tree/standalone-steam-gptk4
+- Free NotProton fork (standalone-steam-gptk4) - https://github.com/NotProtonNot/NotProton/pull/18
 - Dobby (hook library) - https://github.com/jmpews/Dobby
 - Sikarugir - https://github.com/Sikarugir-App/Sikarugir
   - Engines (list + downloads) - https://github.com/Sikarugir-App/Engines
