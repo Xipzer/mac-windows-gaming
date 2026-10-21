@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# doctor.sh - report what's installed and which versions. Read-only.
-# Run before debugging or before an agent acts.
 
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

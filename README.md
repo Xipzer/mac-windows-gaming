@@ -61,7 +61,7 @@ Mac Steam (/Applications/Steam.app)
 | `scripts/setup-notproton.sh` | Build/install the NotProton stack. `--skip-build` after a Steam update, `--force` to rebuild, `--uninstall` to restore stock Steam. |
 | `scripts/doctor.sh` | Read-only system report. |
 | `scripts/check-compat.sh` | Will this game run? Encodes the decision tree. |
-| `notproton/` | Fork patch, ntdll detour, runner env (GPL-3.0, see [notproton/README.md](notproton/README.md)). |
+| `notproton/` | Fork patch, ntdll detour, runner env (see [notproton/README.md](notproton/README.md)). |
 | *Legacy wrapper* | `install.sh --legacy-wrapper`, `setup-steam.sh`, `swap-engine.sh`, `update-wrapper.sh`, `update-dxmt.sh`, `fetch-d3dmetal.sh`: Windows Steam inside a Sikarugir wrapper. Superseded, kept as a fallback. |
 
 ```bash
@@ -83,15 +83,7 @@ AI agents: read [AGENTS.md](AGENTS.md) first.
 - ~2 GB for the runner and build, plus your games. You must **own** the games.
 - Rosetta 2. macOS 27 is the last version with full Rosetta 2; macOS 28+ may need ARM64 Wine builds ([docs/SOURCES.md](docs/SOURCES.md)).
 
-## Licensing
+## Downloaded binaries
 
-- Scripts and docs: MIT (`LICENSE`). `notproton/` is GPL-3.0 (patch to and bytes derived from NotProton).
 - No Apple binaries are committed. D3DMetal comes from Sikarugir's published template at install time; the legacy route fetches your own copy (`fetch-d3dmetal.sh`).
 - Valve's DLLs are downloaded from Valve's CDN on your machine and hash-checked.
-
-## Credits
-
-**NotProtonNot** (NotProton), **Maxyme** (standalone fork), **Sikarugir** (Wine engines and
-templates), **Gcenx**, **3Shain/DXMT**, **Valve** (Proton's lsteamclient), **Apple** (GPTk),
-**Heroic**, and the **r/macgaming** / **AppleGamingWiki** communities.
-Links and version snapshot: [docs/SOURCES.md](docs/SOURCES.md).

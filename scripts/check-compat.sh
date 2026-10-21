@@ -1,21 +1,9 @@
 #!/usr/bin/env bash
-# check-compat.sh - will this game run on Apple Silicon via the free stack?
-#
-# Queries ProtonDB and applies dealbreaker rules (kernel anti-cheat, EA App, native ports).
-# Advisory only: confirm on AppleGamingWiki. Decision tree: docs/COMPATIBILITY.md.
-#
-# Usage:
-#   ./check-compat.sh <steam_app_id>
-#   ./check-compat.sh --name "Dragon Ball Sparking Zero"   # best-effort, prints links
-#
-# Exit codes: 0 likely-works, 2 caveated, 3 blocked, 1 unknown/error
 
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${HERE}/lib.sh"
 
-# Curated dealbreakers / notes keyed by steam appid (things public APIs won't tell you cleanly).
-# Format: appid|verdict|note
 KNOWN=$(cat <<'EOF'
 1774580|BLOCKED_EA|Star Wars Jedi: Survivor - EA game. Needs the EA App, which does NOT work under free Wine (INST-14-1627). Denuvo removed 2024, no anti-cheat. Only path: paid CrossOver.
 1222680|BLOCKED_EA|Need for Speed Heat - EA game. EA App required; no free route. Use CrossOver.
@@ -27,7 +15,6 @@ KNOWN=$(cat <<'EOF'
 EOF
 )
 
-# Games with official native macOS ports - prefer native over translation.
 NATIVE_PORTS=$(cat <<'EOF'
 Batman: Arkham City|64-bit Metal (Rosetta). Run NATIVE - beats D3DMetal.
 Middle-earth: Shadow of Mordor|64-bit Metal (Rosetta). Run NATIVE - Wine route is unplayable.
@@ -65,7 +52,6 @@ check_by_id() {
     esac
   fi
 
-  # Fall back to ProtonDB tier as a heuristic
   info "No curated entry - querying ProtonDB for appid ${id}…"
   local tier
   tier="$(curl -fsSL "https://www.protondb.com/api/v1/reports/summaries/${id}.json" 2>/dev/null \

@@ -1,17 +1,4 @@
 #!/usr/bin/env bash
-# setup-steam.sh - (legacy route) build a working Windows-Steam Sikarugir wrapper.
-#
-# Applies the fixes that work on Apple Silicon in 2026:
-#   - Latest template + Sikarugir 11 (Wine 11) engine, so the CEF webhelper doesn't stall
-#   - Launch target = steam.exe (NOT the installer), so setup stops re-running
-#   - `-tcp` launch flag, avoiding "Unexpected Transport Error (0x3008)"
-#   - Newest Apple D3DMetal overlaid for DX11/12 games
-#
-# Sikarugir Creator has no headless wrapper-create API, so this automates the rest
-# and prints the 2 GUI clicks needed.
-#
-# Usage:  ./setup-steam.sh
-#         ./setup-steam.sh --engine WS12WineCX24.0.7_7   # override engine
 
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -56,8 +43,6 @@ EOF
 }
 
 step_update_template() {
-  # Newer engines (Wine 11) need a newer wrapper template; newer templates also ship
-  # newer D3DMetal/DXMT. Safe: keeps SharedSupport (engine, prefix, games).
   bash "${HERE}/update-wrapper.sh" Steam || warn "Template update failed; continuing with the current one"
 }
 
@@ -65,7 +50,6 @@ step_apply_engine() {
   local w="$1" wine_dir cur want
   wine_dir="$(wrapper_wine_dir "$w")"
   cur=""; [[ -f "${wine_dir}/version" ]] && cur="$(cat "${wine_dir}/version")"
-  # "WS12WineSikarugir11.0_1" -> "sikarugir 11.0 (revision 1)"
   want="$(printf '%s' "$ENGINE" | sed -E 's/^WS12WineSikarugir([0-9]+\.[0-9]+)(_([0-9]+))?$/sikarugir \1 (revision \3)/' | tr '[:upper:]' '[:lower:]')"
   if [[ -n "$cur" ]] && printf '%s' "$cur" | tr '[:upper:]' '[:lower:]' | grep -qF "${want% (revision )}"; then
     ok "Wine engine already ${cur}"
@@ -88,8 +72,6 @@ step_fix_launch_target() {
 }
 
 step_overlay_d3dmetal() {
-  # Only overlay YOUR extracted D3DMetal if it is newer than what the wrapper already has.
-  # (Sikarugir templates now bundle recent D3DMetal builds, e.g. 4.0b2 in template 1.0.21.)
   local w="$1" ext mine theirs
   ext="$(wrapper_d3dmetal_external "$w")"
   [[ -x "${GPTK_EXTRACT_DIR}/lib/external/D3DMetal.framework/Versions/A/D3DMetal" ]] \
@@ -121,7 +103,7 @@ main() {
 
   local w; w="$(find_wrapper Steam || true)"
   if [[ -z "$w" ]]; then
-    step_guide_create_wrapper || exit 0   # exits 0: user must do GUI step then re-run
+    step_guide_create_wrapper || exit 0
   fi
   w="$(find_wrapper Steam)"; [[ -n "$w" ]] || die "Steam wrapper still not found"
 

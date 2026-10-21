@@ -3,7 +3,7 @@
 [NotProton](https://github.com/NotProtonNot/NotProton) (Sept 2026) turns on Steam Play inside **native macOS Steam**, like Proton on Linux.
 
 - Upstream only runs on paid CrossOver Preview builds; the maintainer declined free-Wine support ([PR #18](https://github.com/NotProtonNot/NotProton/pull/18)).
-- NotProton is GPL-3.0, so this repo runs a **free fork** on Sikarugir's free Wine 11, built and installed by `scripts/setup-notproton.sh`.
+- This repo runs a **free fork** on Sikarugir's free Wine 11, built and installed by `scripts/setup-notproton.sh`.
 
 ```
 Old route:  Mac -> Sikarugir wrapper -> Windows Steam client (CEF, -tcp, ...) -> game

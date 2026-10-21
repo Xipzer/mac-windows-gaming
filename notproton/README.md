@@ -22,8 +22,3 @@ NP_FORCE_LOAD_PATH=0x58 python3 apply.py clean.dll patched.dll detour2-myengine.
 
 - `resolve.py` must accept `NP_FORCE_LOAD_PATH` (the `load_path` stack slot): Sikarugir's build keeps it at `rsp+0x58`, where upstream's heuristic expects another slot.
 - Find the slot by disassembling `build_module` up to the hook.
-
-## License
-
-Files in this directory derive from NotProton and are **GPL-3.0**. Sources: https://github.com/NotProtonNot/NotProton,
-https://github.com/NotProtonNot/NotProton/pull/18. The rest of this repository is MIT.

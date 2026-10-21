@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-# update-dxmt.sh - (legacy route) update DXMT (DirectX 10/11 -> Metal) in a wrapper.
-#
-# Overlays the latest "builtin" release from github.com/3Shain/dxmt over Sikarugir's
-# bundled copy. Only matters for DX10/11 games set to DXMT instead of D3DMetal.
-#
-# Usage:  ./update-dxmt.sh [WrapperName]
 
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,8 +16,6 @@ tag="$(gh_latest_tag "$DXMT_REPO")"; [[ -n "$tag" ]] || die "Could not resolve l
 info "DXMT: installed=${cur:-none}  latest=${tag}"
 
 if [[ "$cur" == "$tag" ]]; then ok "Already up to date (${tag})"; exit 0; fi
-# Newer Sikarugir templates ship development builds like "v0.80-244-g7c8dee1" (244 commits
-# past v0.80). Those are NEWER than the release, so don't "update" them backwards.
 if [[ "$cur" == "${tag}-"* ]] || { [[ -n "$cur" ]] && version_gt "${cur#v}" "${tag#v}"; }; then
   ok "Installed ${cur} is newer than the latest release ${tag} - leaving it"
   exit 0
@@ -35,7 +27,6 @@ tmp="$(mktemp -d /tmp/dxmt.XXXXXX)"
 curl -fsSL -o "${tmp}/dxmt.tgz" "$url"
 tar -xzf "${tmp}/dxmt.tgz" -C "$tmp"
 
-# release layout: <tag>/{x86_64-unix,i386-windows,x86_64-windows}/...
 src="$(/usr/bin/find "$tmp" -maxdepth 2 -type d -name "x86_64-windows" | head -1)"; src="$(dirname "$src")"
 [[ -d "$src" ]] || die "Unexpected DXMT archive layout"
 

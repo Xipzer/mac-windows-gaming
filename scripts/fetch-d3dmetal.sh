@@ -1,18 +1,4 @@
 #!/usr/bin/env bash
-# fetch-d3dmetal.sh - (legacy wrapper route) get Apple's D3DMetal on THIS machine.
-#
-# Apple's D3DMetal (DirectX 11/12 -> Metal) is free to download but its EULA forbids
-# redistribution, so this repo ships no Apple binaries; each user fetches their own.
-# Optional since Oct 2026: templates 1.0.21+ bundle D3DMetal 4.0b2. Use this only for a
-# NEWER Apple build than the wrapper ships.
-#
-# Sources tried, in order:
-#   1. A GPTk DMG the user already has (arg / env GPTK_DMG / ~/Downloads/*Game_Porting_Toolkit*.dmg)
-#   2. Gcenx's Homebrew game-porting-toolkit formula (pulls Apple's redistributable D3DMetal)
-#
-# Output: extracts D3DMetal.framework + libd3dshared.dylib into $GPTK_EXTRACT_DIR/lib/external
-#
-# Usage:  ./fetch-d3dmetal.sh [/path/to/Game_Porting_Toolkit.dmg]
 
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -32,7 +18,6 @@ extract_from_dmg() {
   mnt="$(mktemp -d /tmp/gptk.XXXXXX)"
   hdiutil attach "$dmg" -nobrowse -quiet -mountpoint "$mnt" || return 1
 
-  # The outer GPTk DMG contains an inner "Evaluation environment" DMG.
   local eval_dmg redist mnt2=""
   eval_dmg="$(/usr/bin/find "$mnt" -maxdepth 1 -iname "*Evaluation environment*Windows games*.dmg" | head -1)"
   if [[ -n "$eval_dmg" ]]; then
@@ -60,7 +45,6 @@ extract_from_brew_gptk() {
   info "Trying Gcenx Homebrew game-porting-toolkit (ships Apple's redistributable D3DMetal)…"
   have brew || { warn "Homebrew not available"; return 1; }
   brew tap gcenx/wine >/dev/null 2>&1 || true
-  # The formula installs D3DMetal into its prefix; we copy it out.
   if brew list game-porting-toolkit >/dev/null 2>&1 || brew install --quiet gcenx/wine/game-porting-toolkit 2>/dev/null; then
     local prefix ext
     prefix="$(brew --prefix game-porting-toolkit 2>/dev/null || true)"
@@ -82,7 +66,6 @@ main() {
     exit 0
   fi
 
-  # 1) explicit arg or env or ~/Downloads
   local dmg="${1:-${GPTK_DMG:-}}"
   if [[ -z "$dmg" ]]; then
     dmg="$(/usr/bin/find "${HOME}/Downloads" -maxdepth 1 -iname "*Game_Porting_Toolkit*.dmg" 2>/dev/null | head -1)"
@@ -92,7 +75,6 @@ main() {
     exit 0
   fi
 
-  # 2) brew gptk
   if extract_from_brew_gptk; then
     ok "D3DMetal obtained via Homebrew game-porting-toolkit -> ${DEST}"
     exit 0

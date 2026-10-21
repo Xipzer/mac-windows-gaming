@@ -1,4 +1,3 @@
-# Never commit Apple binaries / extracted D3DMetal (license: no redistribution)
 GPTk-D3DMetal/
 *.dmg
 **/D3DMetal.framework/
@@ -6,16 +5,13 @@ libd3dshared.dylib
 *.tar.xz
 *.tar.gz
 
-# macOS
 .DS_Store
 .AppleDouble
 ._*
 
-# Editor
 .vscode/
 .idea/
 *.swp
 
-# Local scratch
 /tmp/
 *.log

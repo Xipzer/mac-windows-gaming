@@ -1,29 +1,10 @@
 #!/usr/bin/env bash
-# install.sh - one-shot setup for free Windows gaming on Apple Silicon macOS.
-# Default route: native Mac Steam + free NotProton fork on Sikarugir Wine 11.
-#
-#   1. Checks Apple Silicon + macOS 14+; installs Rosetta 2, Homebrew, cmake.
-#   2. Installs Steam for macOS (if missing) and Heroic (Epic/GOG/Amazon).
-#   3. Runs scripts/setup-notproton.sh (builds the fork, assembles the Wine 11 runner,
-#      stages the Steam bridge, patches Steam.app after backing it up).
-#
-# Run:  curl -fsSL https://raw.githubusercontent.com/Xipzer/mac-windows-gaming/main/install.sh | bash
-#   or: ./install.sh
-#
-# Flags:
-#   --no-heroic        skip Heroic
-#   --no-steam         skip all Steam setup (Heroic only)
-#   --legacy-wrapper   old route: Windows Steam inside a Sikarugir wrapper (needs 2 GUI clicks)
-#   --gptk-dmg P       (legacy route only) use a specific Game Porting Toolkit DMG
-#
-# Idempotent. Re-running is also the fix after a Steam client update.
 
 set -euo pipefail
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
 REPO_URL="https://github.com/Xipzer/mac-windows-gaming.git"
 
-# curl|bash has no repo next to it: clone one (setup-notproton.sh needs notproton/ assets).
 resolve_repo() {
   if [[ -f "${SELF_DIR}/scripts/lib.sh" && -d "${SELF_DIR}/notproton" ]]; then
     REPO_DIR="$SELF_DIR"
@@ -33,7 +14,6 @@ resolve_repo() {
     else rm -rf "$REPO_DIR"; git clone -q --depth 1 "$REPO_URL" "$REPO_DIR"; fi
   fi
   SCRIPTS_DIR="$REPO_DIR/scripts"
-  # shellcheck source=scripts/lib.sh
   source "${SCRIPTS_DIR}/lib.sh"
 }
 

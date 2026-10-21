@@ -1,6 +1,4 @@
 #!/bin/sh
-# Steam launch-option wrapper: replace the UE launcher stub with the real game exe.
-# Usage in Steam launch options:  "<this script>" %command%
 out=""
 for a in "$@"; do
   case "$a" in

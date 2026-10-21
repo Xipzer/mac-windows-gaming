@@ -1,17 +1,4 @@
 #!/usr/bin/env bash
-# update-wrapper.sh - (legacy route) update a Sikarugir wrapper's template (launcher,
-# libraries, renderers) to the newest version. CLI form of Configure -> Tools -> Update Wrapper.
-#
-# Why: on template 1.0.11 a Wine 11 engine fails at launch with
-#        ERROR: The operation couldn't be completed. (SikarugirSdk.FileUtilsError error 1.)
-#      1.0.21 runs it and bundles newer renderers (D3DMetal 4.0b2, DXMT newer than v0.80).
-#
-# What it replaces:  Contents/{MacOS,Frameworks,Resources,Configure.app}
-# What it keeps:     Contents/SharedSupport (Wine engine, prefix, your games), Info.plist
-#                    (only the version keys are bumped)
-# Backup:            ~/Applications/Sikarugir/.<Name>-wrapper-backup-<timestamp>/
-#
-# Usage:  ./update-wrapper.sh [WrapperName] [--version 1.0.21]
 
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

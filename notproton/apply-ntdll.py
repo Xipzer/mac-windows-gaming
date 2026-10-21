@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the NotProton steamclient detour to a Sikarugir Wine ntdll.dll.
 
-usage: apply-ntdll.py <patch.json> <ntdll.dll>
-
-Idempotent: exits 0 if the file is already patched. Refuses (exit 2) when the
-input is neither the known clean nor the known patched build, so a different
-engine never gets bytes meant for another one.
-"""
 import hashlib
 import json
 import sys

@@ -1,32 +1,10 @@
 #!/usr/bin/env bash
-# setup-notproton.sh - free NotProton for NATIVE macOS Steam, on Sikarugir Wine 11.
-#
-# Result: /Applications/Steam.app runs Windows games itself, with a normal Play button.
-# No Windows-Steam wrapper, no CrossOver licence.
-#
-# Pieces (all pinned + checksummed, all free):
-#   NotProton fork  NotProton PR #18 (standalone-steam-gptk4) (GPL-3.0) + notproton/notproton-free.patch
-#   Wine engine     Sikarugir WS12WineSikarugir11.0_1 (Wine 11)
-#   Libraries       Sikarugir Template-1.0.21 Frameworks (D3DMetal 4.0b2, DXMT, MoltenVK, GStreamer)
-#   Steam bridge    lsteamclient + steam.exe from the NotProton v1.0.1 release, Valve DLLs from Valve's CDN
-#   ntdll patch     notproton/ntdll-sikarugir11.json (steamclient64 -> lsteamclient detour, keeps Steam DRM working)
-#
-# Usage:  ./setup-notproton.sh [--force] [--no-default] [--skip-build]
-#   --force       rebuild runner + source even if present
-#   --no-default  don't make NotProton the default for all Windows games
-#   --skip-build  reuse an existing build (for re-running after a Steam update)
-#
-# Idempotent. Backs up /Applications/Steam.app once before the first patch.
-# Undo:  ./setup-notproton.sh --uninstall
 
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
-# shellcheck source=scripts/lib.sh
 source "${HERE}/lib.sh"
 
-# ---- pins -------------------------------------------------------------------
-# The original fork repo was deleted; upstream keeps its commits as closed PR #18.
 FORK_URL="https://github.com/NotProtonNot/NotProton.git"
 FORK_REF="pull/18/head"
 FORK_COMMIT="5b8d18683b619b66390be8cbcffc1fbf47e45971"
@@ -40,12 +18,10 @@ ENGINE_SHA="67e29fb3d74f363af39c69ba11f9b13a79812c5db07cf4748672658e4a200a0e"
 TEMPLATE="1.0.21"
 TEMPLATE_SHA="bbe996e4e4375318485953d0c7818b7b4b0a4dc1f13303bcc584f99f7602f78d"
 
-# ---- paths ------------------------------------------------------------------
 STEAM_APP="/Applications/Steam.app"
 AS="$HOME/Library/Application Support"
 NP="$AS/notproton"
 FREE="$AS/notproton-free"
-# Build tree must live on a path without spaces (the fork's Makefile/cmake can't quote them).
 SRC="$HOME/Library/Caches/notproton-free/src"
 CACHE="$HOME/Library/Caches/notproton-free/downloads"
 RUNNER="$NP/runners/sikarugir-11"
@@ -66,7 +42,7 @@ done
 
 sha_ok() { [[ "$(shasum -a 256 "$1" | cut -d' ' -f1)" == "$2" ]]; }
 
-fetch() { # url dest sha
+fetch() {
   if [[ -f "$2" ]] && sha_ok "$2" "$3"; then return 0; fi
   log "  downloading $(basename "$2")"
   curl -fSL --progress-bar -o "$2.part" "$1"
@@ -97,7 +73,6 @@ uninstall() {
   exit 0
 }
 
-# ---- 1. prerequisites -------------------------------------------------------
 require_apple_silicon
 require_macos_14_plus
 [[ -d "$STEAM_APP" ]] || die "Install Steam for macOS first: https://store.steampowered.com/about/ (or: brew install --cask steam)"
@@ -115,7 +90,6 @@ ok "Prerequisites present"
 
 quit_steam
 
-# ---- 2. NotProton fork: fetch, patch, build ----------------------------------
 if (( ! SKIP_BUILD )); then
   info "Building the free NotProton fork"
   if (( FORCE )) || [[ "$(git -C "$SRC" rev-parse HEAD 2>/dev/null)" != "$FORK_COMMIT" ]]; then
@@ -135,14 +109,12 @@ if (( ! SKIP_BUILD )); then
 fi
 [[ -f "$SRC/out/notproton.dylib" ]] || die "No build at $SRC/out (run without --skip-build)"
 
-# Newest Steam-client signatures from upstream (lets the dylib match new Steam builds).
 sigdir="$NP/signatures/macos.arm64"; mkdir -p "$sigdir"
 for u in $(curl -fsSL "$NP_SIG_API" 2>/dev/null | sed -n 's/.*"download_url": *"\([^"]*\.json\)".*/\1/p'); do
   curl -fsSL -o "$sigdir/$(basename "$u")" "$u" || true
 done
 ok "Signatures: $(find "$sigdir" -name "*.json" | wc -l | tr -d ' ') Steam builds"
 
-# ---- 3. Wine 11 runner ---------------------------------------------------------
 if (( FORCE )) || [[ ! -x "$RUNNER/bin/wine" ]]; then
   info "Assembling the Wine 11 runner"
   fetch "${SIKARUGIR_ENGINES_URL}/${ENGINE}.tar.xz" "$CACHE/${ENGINE}.tar.xz" "$ENGINE_SHA"
@@ -161,7 +133,6 @@ fi
 cp -f "$REPO/notproton/runner.env" "$RUNNER/runner.env"
 ln -sfn sikarugir-11 "$NP/runners/current"
 
-# ---- 4. Steam bridge ------------------------------------------------------------
 info "Staging the Steam bridge"
 fetch "$NP_ZIP_URL" "$CACHE/NotProton-v1.0.1.zip" "$NP_ZIP_SHA"
 pz="$(mktemp -d /tmp/npz.XXXXXX)"; unzip -q "$CACHE/NotProton-v1.0.1.zip" -d "$pz"
@@ -183,15 +154,11 @@ cp -f "$P/x86_64-unix-lsteamclient.so" "$W/x86_64-unix/lsteamclient.so"
 ln -sf lsteamclient.so "$W/x86_64-unix/steamclient.so"; ln -sf lsteamclient.so "$W/x86_64-unix/steamclient64.so"
 codesign -f -s - "$BRIDGE/lsteamclient.so" "$BRIDGE/x86_64-unix/lsteamclient.so" "$W/x86_64-unix/lsteamclient.so" 2>/dev/null
 rm -rf "$pz"
-# Valve's own steamclient/tier0/vstdlib + legacycompat, hash-checked against the fork's manifest.
 ( cd "$SRC" && BRIDGE_DIR="$BRIDGE" ./bridge/fetch-valve.sh --install >"$FREE/valve-fetch.log" 2>&1 ) \
   || { tail -15 "$FREE/valve-fetch.log"; die "Valve bridge fetch failed"; }
-# Games must load VALVE's steamclient64 (Steam DRM checks it); the ntdll detour reroutes it.
-# fetch-valve.sh just (re)installed the hash-verified Valve copies; keep a pristine .valve beside them.
 for f in steamclient64.dll steamclient.dll; do cp -p "$BRIDGE/$f" "$BRIDGE/$f.valve"; done
 ok "Bridge: lsteamclient + Valve DLLs"
 
-# ---- 5. ntdll detour -------------------------------------------------------------
 info "Patching Wine's ntdll.dll (Steam DRM fix)"
 nt="$W/x86_64-windows/ntdll.dll"
 [[ -f "$nt.notproton-orig" ]] || cp -p "$nt" "$nt.notproton-orig"
@@ -200,7 +167,6 @@ python3 "$REPO/notproton/apply-ntdll.py" "$REPO/notproton/ntdll-sikarugir11.json
 cp -f "$nt" "$BRIDGE/wine/x86_64-windows/ntdll.dll"
 ok "ntdll patched (runner + bridge)"
 
-# ---- 6. Patch Steam.app ------------------------------------------------------------
 info "Injecting NotProton into Steam.app"
 if [[ -z "$(find "$FREE" -maxdepth 2 -path "*/backup-*/Steam.app" 2>/dev/null | head -1)" ]]; then
   bk="$FREE/backup-$(date +%Y%m%d%H%M%S)"; mkdir -p "$bk"; ditto "$STEAM_APP" "$bk/Steam.app"
@@ -217,7 +183,6 @@ codesign -f -s - "$STEAM_APP" 2>/dev/null
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$STEAM_APP"
 ok "Steam.app patched and re-signed"
 
-# ---- 7. Compatibility tool -----------------------------------------------------------
 mkdir -p "$COMPAT"
 cat > "$COMPAT/compatibilitytool.vdf" <<'EOF'
 "compatibilitytools"
@@ -263,7 +228,6 @@ PY
   ok "NotProton is the default for Windows games (Settings > Compatibility)"
 fi
 
-# ---- 8. verify ------------------------------------------------------------------------
 t="$(STEAM_COMPAT_DATA_PATH=/tmp/np_test "$COMPAT/run" getcompatpath 2>/dev/null || true)"
 if [[ "$t" == /tmp/np_test ]]; then ok "Run script responds"; else warn "Run script self-test returned '$t'"; fi
 
