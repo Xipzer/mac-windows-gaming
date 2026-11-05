@@ -1,0 +1,53 @@
+From cbe00ffe866269b9c208e38600227fa3e8d71b45 Mon Sep 17 00:00:00 2001
+From: Xipz <xipz@192.168.1.107>
+Date: Tue, 20 Oct 2026 15:10:20 +0100
+Subject: [PATCH 2/9] d3d11: suballocate small DEFAULT constant buffers from
+ one page
+
+---
+ src/d3d11/d3d11_buffer.cpp | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/src/d3d11/d3d11_buffer.cpp b/src/d3d11/d3d11_buffer.cpp
+index c354db3..f773bd6 100644
+--- a/src/d3d11/d3d11_buffer.cpp
++++ b/src/d3d11/d3d11_buffer.cpp
+@@ -22,6 +22,7 @@
+ #include "dxmt_dynamic.hpp"
+ #include "dxmt_format.hpp"
+ #include "d3d11_resource.hpp"
++#include "config/config.hpp"
+ 
+ namespace dxmt {
+ 
+@@ -79,6 +80,12 @@ private:
+     }
+   };
+ 
++  static bool
++  SuballocateDefaultConstantBuffer() {
++    static const bool enabled = Config::getInstance().getOption<bool>("d3d11.suballocateDefaultConstantBuffer", true);
++    return enabled;
++  }
++
+ public:
+   D3D11Buffer(const tag_buffer::DESC1 *pDesc, const D3D11_SUBRESOURCE_DATA *pInitialData, MTLD3D11Device *device) :
+       TResourceBase<tag_buffer>(*pDesc, device) {
+@@ -89,7 +96,13 @@ public:
+     // if (pDesc->Usage != D3D11_USAGE_DEFAULT)
+     if (pDesc->Usage == D3D11_USAGE_IMMUTABLE)
+       flags.set(BufferAllocationFlag::GpuReadonly);
+-    if (pDesc->Usage != D3D11_USAGE_DYNAMIC) {
++    if (pDesc->Usage == D3D11_USAGE_DEFAULT && pDesc->BindFlags == D3D11_BIND_CONSTANT_BUFFER &&
++        pDesc->ByteWidth <= DXMT_PAGE_SIZE && SuballocateDefaultConstantBuffer()) {
++      // Constant buffers updated with UpdateSubresource are renamed on every update. Suballocating
++      // the versions from one shared page (like dynamic buffers) avoids a new MTLBuffer, a
++      // retain and a useResource per update.
++      flags.set(BufferAllocationFlag::SuballocateFromOnePage);
++    } else if (pDesc->Usage != D3D11_USAGE_DYNAMIC) {
+       if (pInitialData)
+         flags.set(BufferAllocationFlag::GpuManaged);
+       else if (pDesc->BindFlags & kD3D11OutputBindFlags)
+-- 
+2.54.0 (Apple Git-157)
+

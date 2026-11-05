@@ -8,10 +8,10 @@ KNOWN=$(cat <<'EOF'
 1774580|BLOCKED_EA|Star Wars Jedi: Survivor - EA game. Needs the EA App, which does NOT work under free Wine (INST-14-1627). Denuvo removed 2024, no anti-cheat. Only path: paid CrossOver.
 1222680|BLOCKED_EA|Need for Speed Heat - EA game. EA App required; no free route. Use CrossOver.
 730|BLOCKED_AC|Counter-Strike 2 - VAC + kernel-adjacent anti-cheat. Does not run under Wine on Mac.
-1790600|OK|Dragon Ball Sparking! ZERO - DX12, no Denuvo, no anti-cheat. Works via D3DMetal. Lock 60 FPS (game speed tied to FPS). Offline only (online broken under Wine).
-1237320|OK|Sonic Frontiers - no anti-cheat. Generally works via D3DMetal.
-920210|OK|LEGO Star Wars: The Skywalker Saga - works via D3DMetal.
-208650|NATIVE|Batman: Arkham Knight - heavy DX11; check AppleGamingWiki, D3DMetal works but tune settings.
+1790600|OK|Dragon Ball Sparking! ZERO - DX12 D3DMetal, no Denuvo, no anti-cheat. Tuned profile in configs/games. UE launcher stub: use direct-shipping.sh launch option. Game speed tied to FPS: keep 60. Offline only.
+1237320|OK|Sonic Frontiers - D3DMetal, no anti-cheat. Tuned profile in configs/games (dinput8 proxy removes the 60 fps cap).
+920210|OK|LEGO Star Wars: The Skywalker Saga - D3DMetal, WINEMSYNC=0 (msync hangs). Tuned profile in configs/games.
+208650|OK|Batman: Arkham Knight - DX11, DXMT (dxmt-codegen), AVX off. Native 3024x1964 avg 74. Tuned profile in configs/games.
 EOF
 )
 
@@ -52,7 +52,7 @@ check_by_id() {
     esac
   fi
 
-  info "No curated entry - querying ProtonDB for appid ${id}…"
+  info "No curated entry - querying ProtonDB for appid ${id}"
   local tier
   tier="$(curl -fsSL "https://www.protondb.com/api/v1/reports/summaries/${id}.json" 2>/dev/null \
           | sed -n 's/.*"tier": *"\([^"]*\)".*/\1/p' | head -1 || true)"

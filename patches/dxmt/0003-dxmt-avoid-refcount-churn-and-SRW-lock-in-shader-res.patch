@@ -1,0 +1,113 @@
+From 3b3d88bef1aa5a541d56ebb5ebb24d7fe865a337 Mon Sep 17 00:00:00 2001
+From: Xipz <xipz@192.168.1.107>
+Date: Tue, 20 Oct 2026 15:10:27 +0100
+Subject: [PATCH 3/9] dxmt: avoid refcount churn and SRW lock in shader
+ resource encoding
+
+---
+ src/dxmt/dxmt_context.cpp |  6 +++---
+ src/dxmt/dxmt_context.hpp |  2 +-
+ src/dxmt/dxmt_texture.cpp |  6 ++++--
+ src/dxmt/dxmt_texture.hpp | 14 ++++++++++++++
+ 4 files changed, 22 insertions(+), 6 deletions(-)
+
+diff --git a/src/dxmt/dxmt_context.cpp b/src/dxmt/dxmt_context.cpp
+index bfa03d1..5d69bd7 100644
+--- a/src/dxmt/dxmt_context.cpp
++++ b/src/dxmt/dxmt_context.cpp
+@@ -221,7 +221,7 @@ ArgumentEncodingContext::encodeConstantBuffers(const MTL_SHADER_REFLECTION *refl
+         makeResident<stage, kind>(dummy_cbuffer_, GetResidencyMask<kind>(stage, true, false));
+         continue;
+       }
+-      auto argbuf = cbuf.buffer;
++      auto &argbuf = cbuf.buffer;
+       auto valid_length = argbuf->length() > cbuf.offset ? argbuf->length() - cbuf.offset : 0;
+       auto [argbuf_alloc, argbuf_offset] = access<stage>(argbuf, cbuf.offset, valid_length, ResourceAccess::Read);
+       encoded_buffer[arg.StructurePtrOffset] = argbuf_alloc->gpuAddress() + argbuf_offset + cbuf.offset;
+@@ -354,7 +354,7 @@ ArgumentEncodingContext::encodeShaderResources(
+           makeResident<stage, kind>(srv.buffer.ptr(), srv.viewId);
+         } else if (srv.texture.ptr()) {
+           assert(arg.Flags & MTL_SM50_SHADER_ARGUMENT_TEXTURE_MINLOD_CLAMP);
+-          auto viewIdChecked = srv.texture->checkViewUseArray(srv.viewId, arg.Flags & MTL_SM50_SHADER_ARGUMENT_TEXTURE_ARRAY);
++          auto viewIdChecked = srv.texture->checkViewUseArrayFast(srv.viewId, arg.Flags & MTL_SM50_SHADER_ARGUMENT_TEXTURE_ARRAY);
+           encoded_buffer[arg.StructurePtrOffset] =
+               access<stage>(srv.texture, viewIdChecked, ResourceAccess::Read).gpuResourceID;
+           encoded_buffer[arg.StructurePtrOffset + 1] = TextureMetadata(srv.texture->arrayLength(viewIdChecked), 0);
+@@ -394,7 +394,7 @@ ArgumentEncodingContext::encodeShaderResources(
+           makeResident<stage, kind>(uav.buffer.ptr(), uav.viewId, read, write);
+         } else if (uav.texture.ptr()) {
+           assert(arg.Flags & MTL_SM50_SHADER_ARGUMENT_TEXTURE_MINLOD_CLAMP);
+-          auto viewIdChecked = uav.texture->checkViewUseArray(uav.viewId, arg.Flags & MTL_SM50_SHADER_ARGUMENT_TEXTURE_ARRAY);
++          auto viewIdChecked = uav.texture->checkViewUseArrayFast(uav.viewId, arg.Flags & MTL_SM50_SHADER_ARGUMENT_TEXTURE_ARRAY);
+           encoded_buffer[arg.StructurePtrOffset] = access<stage>(uav.texture, viewIdChecked, access_flags).gpuResourceID;
+           encoded_buffer[arg.StructurePtrOffset + 1] = TextureMetadata(uav.texture->arrayLength(viewIdChecked), 0);
+           makeResident<stage, kind>(uav.texture.ptr(), viewIdChecked, read, write);
+diff --git a/src/dxmt/dxmt_context.hpp b/src/dxmt/dxmt_context.hpp
+index 1cd99ca..3426ee2 100644
+--- a/src/dxmt/dxmt_context.hpp
++++ b/src/dxmt/dxmt_context.hpp
+@@ -445,7 +445,7 @@ public:
+   bindSampler(unsigned slot, Rc<Sampler> sampler) {
+     unsigned idx = slot + 16 * unsigned(stage);
+     auto &entry = sampler_[idx];
+-    entry.sampler = sampler;
++    entry.sampler = std::move(sampler);
+   }
+ 
+   template <PipelineStage stage>
+diff --git a/src/dxmt/dxmt_texture.cpp b/src/dxmt/dxmt_texture.cpp
+index 0e5b4bd..52b61ae 100644
+--- a/src/dxmt/dxmt_texture.cpp
++++ b/src/dxmt/dxmt_texture.cpp
+@@ -41,12 +41,14 @@ TextureView::TextureView(TextureAllocation *allocation) :
+     texture(allocation->texture()),
+     gpuResourceID(allocation->gpuResourceID),
+     allocation(allocation),
+-    key(allocation->descriptor->fullView) {}
++    key(allocation->descriptor->fullView),
++    type(allocation->descriptor->textureType()) {}
+ 
+ TextureView::TextureView(TextureAllocation *allocation, unsigned index, TextureViewDescriptor descriptor) :
+     gpuResourceID(0),
+     allocation(allocation),
+-    key(descriptor, index, allocation->descriptor->miplevelCount()) {
++    key(descriptor, index, allocation->descriptor->miplevelCount()),
++    type(descriptor.type) {
+   auto parent = allocation->texture();
+   texture = parent.newTextureView(
+       descriptor.format, descriptor.type, descriptor.firstMiplevel, descriptor.miplevelCount,
+diff --git a/src/dxmt/dxmt_texture.hpp b/src/dxmt/dxmt_texture.hpp
+index ba57499..fb2d661 100644
+--- a/src/dxmt/dxmt_texture.hpp
++++ b/src/dxmt/dxmt_texture.hpp
+@@ -97,6 +97,7 @@ public:
+   DXMT_RESOURCE_RESIDENCY_STATE residency{};
+   TextureAllocation *allocation; // `TextureAllocation` holds strong reference to `TextureView`
+   TextureViewKey key;
++  WMTTextureType type;
+ 
+   TextureView(const TextureView &) = delete;
+   TextureView(TextureView &&) = delete;
+@@ -283,6 +284,19 @@ public:
+   TextureView &view(TextureViewKey key, TextureAllocation *allocation);
+ 
+   TextureViewKey checkViewUseArray(TextureViewKey key, bool isArray);
++
++  /**
++  Same as checkViewUseArray, but reads the view type from the current allocation's cached view
++  without taking the descriptor lock. Encoder thread only (like view()).
++  */
++  TextureViewKey
++  checkViewUseArrayFast(TextureViewKey key, bool isArray) {
++    static constexpr uint32_t ARRAY_TYPE_MASK = 0b0101001010;
++    auto type = view(key, current_.ptr()).type;
++    if (likely(bool((1 << uint32_t(type)) & ARRAY_TYPE_MASK) == isArray))
++      return key;
++    return checkViewUseArray(key, isArray);
++  }
+   TextureViewKey checkViewUseFormat(TextureViewKey key, WMTPixelFormat format);
+ 
+   Rc<TextureAllocation> rename(Rc<TextureAllocation> &&newAllocation);
+-- 
+2.54.0 (Apple Git-157)
+

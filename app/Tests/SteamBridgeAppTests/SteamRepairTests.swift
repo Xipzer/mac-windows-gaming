@@ -1,0 +1,244 @@
+import Foundation
+import Testing
+
+@testable import SteamBridgeApp
+
+@Suite("Steam repair", .serialized)
+struct SteamRepairTests {
+
+    private func scratch() throws -> URL {
+        let url = URL.temporaryDirectory.appending(path: "np-repair-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    private func stagedStockBundle(into work: URL) async throws -> URL {
+        let manifest = try ValvePackageManifest.bundled()
+        let bundle = try #require(manifest.bundle)
+        return try await SteamRepair.stage(
+            bundle,
+            bases: manifest.bases,
+            downloads: SupportPaths.packageDownloads,
+            work: work.appending(path: "staging")
+        )
+    }
+
+    @Test("The pinned package unpacks to a bundle that is signed by Valve")
+    func stagesAValveSignedBundle() async throws {
+        let work = try scratch()
+        defer { try? FileManager.default.removeItem(at: work) }
+        let staged = try await stagedStockBundle(into: work)
+
+        #expect(staged.lastPathComponent == "Steam.app")
+        #expect(throws: Never.self) { try SteamRepair.verifyValveSignature(staged) }
+        #expect(SteamRepair.version(of: staged) == "6.1")
+
+        let plist = try #require(SteamBundle.readInfoPlist(at: staged.appending(path: "Contents/Info.plist")))
+        let environment = try #require(plist[SteamBundle.environmentKey] as? [String: Any])
+        #expect(environment[SteamBundle.insertKey] == nil)
+        #expect(environment["LC_ALL"] as? String == "en_US.UTF-8")
+        #expect(environment.count == 1)
+    }
+
+    @Test("An ad-hoc signed bundle is refused even though it verifies strictly")
+    func refusesAdHocSignedBundle() async throws {
+        let work = try scratch()
+        defer { try? FileManager.default.removeItem(at: work) }
+        let staged = try await stagedStockBundle(into: work)
+
+        let copy = work.appending(path: "copy/Steam.app")
+        try FileManager.default.createDirectory(at: copy.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: staged, to: copy)
+        try Shell.check("/usr/bin/codesign", ["-f", "-s", "-", copy.path(percentEncoded: false)])
+
+        let strict = try Shell.run("/usr/bin/codesign", ["--verify", "--strict", copy.path(percentEncoded: false)])
+        #expect(strict.succeeded, "an ad-hoc signature was expected to verify against itself")
+
+        #expect(throws: StepFailure.self) { try SteamRepair.verifyValveSignature(copy) }
+    }
+
+    @Test("A path named after the expected fields cannot answer for them")
+    func refusesFieldsSuppliedByThePath() throws {
+        let work = try scratch()
+        defer { try? FileManager.default.removeItem(at: work) }
+
+        let nested = work
+            .appending(path: "TeamIdentifier=\(SteamRepair.valveTeam)")
+            .appending(path: "Identifier=\(SteamRepair.valveIdentifier)")
+        let app = nested.appending(path: "Steam.app")
+        try FileManager.default.createDirectory(
+            at: app.appending(path: "Contents/MacOS"), withIntermediateDirectories: true
+        )
+        try FileManager.default.copyItem(
+            at: URL(filePath: "/bin/echo"), to: app.appending(path: "Contents/MacOS/Steam")
+        )
+        try Data(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" \
+            "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0"><dict>
+            <key>CFBundleExecutable</key><string>Steam</string>
+            <key>CFBundleIdentifier</key><string>com.attacker.evil</string>
+            </dict></plist>
+            """.utf8
+        ).write(to: app.appending(path: "Contents/Info.plist"))
+
+        let path = app.path(percentEncoded: false)
+        try Shell.check("/usr/bin/codesign", ["-f", "-s", "-", path])
+
+        let strict = try Shell.run("/usr/bin/codesign", ["--verify", "--strict", path])
+        #expect(strict.succeeded, "the ad-hoc signature was expected to verify against itself")
+
+        let described = try Shell.run("/usr/bin/codesign", ["-dvv", path])
+        let text = described.stdout + described.stderr
+        #expect(text.contains("Signature=adhoc"))
+        #expect(text.contains("TeamIdentifier=not set"))
+
+        #expect(throws: StepFailure.self) { try SteamRepair.verifyValveSignature(app) }
+    }
+
+    @Test("A bundle with an added file no longer matches its signature and is refused")
+    func refusesTamperedBundle() async throws {
+        let work = try scratch()
+        defer { try? FileManager.default.removeItem(at: work) }
+        let staged = try await stagedStockBundle(into: work)
+
+        let copy = work.appending(path: "copy/Steam.app")
+        try FileManager.default.createDirectory(at: copy.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: staged, to: copy)
+        #expect(throws: Never.self) { try SteamRepair.verifyValveSignature(copy) }
+
+        try Data("not a dylib".utf8).write(to: copy.appending(path: "Contents/MacOS/steambridge.dylib"))
+
+        #expect(throws: StepFailure.self) { try SteamRepair.verifyValveSignature(copy) }
+    }
+
+    @Test("A manifest with no bundle row cannot repair")
+    func refusesManifestWithoutBundle() async throws {
+        let real = try ValvePackageManifest.bundled()
+        let without = ValvePackageManifest(
+            bases: real.bases, packages: real.packages, files: real.files, bundle: nil
+        )
+
+        await #expect(throws: StepFailure.self) {
+            try await SteamRepair.run(manifest: without)
+        }
+    }
+
+    @Test("Clearing the insert removes that key and nothing else")
+    func clearsOnlyTheInsert() throws {
+        let work = try scratch()
+        defer { try? FileManager.default.removeItem(at: work) }
+
+        let plist = work.appending(path: "Info.plist")
+        let stock: [String: Any] = [
+            "CFBundleVersion": "6.1",
+            SteamBundle.environmentKey: ["LC_ALL": "en_US.UTF-8"],
+        ]
+        var tampered = stock
+        tampered[SteamBundle.environmentKey] = [
+            "LC_ALL": "en_US.UTF-8",
+            SteamBundle.insertKey: "/Applications/Steam.app/Contents/MacOS/steambridge.dylib",
+        ]
+        try SteamBundle.writeInfoPlist(tampered, at: plist)
+
+        #expect(try SteamRepair.clearInsert(at: plist))
+
+        let after = try #require(SteamBundle.readInfoPlist(at: plist))
+        let environment = try #require(after[SteamBundle.environmentKey] as? [String: Any])
+        #expect(environment[SteamBundle.insertKey] == nil)
+        #expect(environment["LC_ALL"] as? String == "en_US.UTF-8", "LC_ALL is Valve's and has to survive")
+        #expect(environment.count == 1, "the environment dict is kept rather than emptied")
+        #expect(after["CFBundleVersion"] as? String == "6.1")
+
+        #expect(try SteamRepair.clearInsert(at: plist) == false)
+    }
+
+    @Test("Clearing the insert reports nothing done when there is no plist or no insert")
+    func clearInsertIsQuietWhenThereIsNothingToDo() throws {
+        let work = try scratch()
+        defer { try? FileManager.default.removeItem(at: work) }
+
+        #expect(try SteamRepair.clearInsert(at: work.appending(path: "absent.plist")) == false)
+
+        let bare = work.appending(path: "bare.plist")
+        try SteamBundle.writeInfoPlist(["CFBundleVersion": "6.1"], at: bare)
+        #expect(try SteamRepair.clearInsert(at: bare) == false)
+    }
+
+    @Test("Repair removes the backup the installer wrote")
+    func removesTheBackupTheInstallerWrote() throws {
+        let work = try scratch()
+        defer { try? FileManager.default.removeItem(at: work) }
+
+        let plist = work.appending(path: "Info.plist")
+        let backups = work.appending(path: "backups")
+        try SteamBundle.writeInfoPlist(["CFBundleVersion": "6.1"], at: plist)
+
+        #expect(try SteamInstaller.backUpPlist(plist, into: backups))
+        #expect(try SteamRepair.removeStaleBackup(from: backups))
+
+        let leftovers = try FileManager.default.contentsOfDirectory(
+            atPath: backups.path(percentEncoded: false)
+        )
+        #expect(leftovers.isEmpty, "left behind: \(leftovers)")
+    }
+
+    @Test("Removing a backup that is not there is not a failure")
+    func absentBackupIsNotAFailure() throws {
+        let work = try scratch()
+        defer { try? FileManager.default.removeItem(at: work) }
+
+        #expect(try SteamRepair.removeStaleBackup(from: work.appending(path: "backups")) == false)
+    }
+
+    @Test("Replacing a bundle leaves Valve's signature intact at the destination")
+    func replaceInstallsAVerifiableBundle() async throws {
+        let work = try scratch()
+        defer { try? FileManager.default.removeItem(at: work) }
+        let staged = try await stagedStockBundle(into: work)
+
+        let destination = work.appending(path: "dest/Steam.app")
+        try FileManager.default.createDirectory(
+            at: destination.appending(path: "Contents/MacOS"), withIntermediateDirectories: true
+        )
+        try Data("stale".utf8).write(to: destination.appending(path: "Contents/MacOS/steambridge.dylib"))
+
+        try SteamRepair.replace(destination, with: staged)
+
+        #expect(throws: Never.self) { try SteamRepair.verifyValveSignature(destination) }
+        #expect(SteamRepair.version(of: destination) == "6.1")
+        #expect(SteamBundle.currentInsert(at: destination.appending(path: "Contents/Info.plist")) == nil)
+        #expect(
+            !FileManager.default.fileExists(
+                atPath: destination.appending(path: "Contents/MacOS/steambridge.dylib").path(percentEncoded: false)
+            ),
+            "the injected dylib survived the replacement"
+        )
+    }
+
+    @Test("A bundle that is not installed at all is installed rather than refused")
+    func replaceInstallsWhenNothingIsThere() async throws {
+        let work = try scratch()
+        defer { try? FileManager.default.removeItem(at: work) }
+        let staged = try await stagedStockBundle(into: work)
+
+        let destination = work.appending(path: "dest/Steam.app")
+        try FileManager.default.createDirectory(
+            at: destination.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
+        try SteamRepair.replace(destination, with: staged)
+
+        #expect(throws: Never.self) { try SteamRepair.verifyValveSignature(destination) }
+    }
+
+    @Test("The download phase shows the download's own wording")
+    func downloadPhaseDelegatesItsLabel() {
+        #expect(RepairPhase.downloading(.reusing).label
+                == PinnedDownload.Progress.reusing.label)
+        #expect(RepairPhase.downloading(.fetching(host: "cdn.example")).label
+                == "Downloading from cdn.example")
+    }
+
+}

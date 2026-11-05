@@ -1,0 +1,120 @@
+From a374ecf733aeb3e95cc9f04661c4bc294e172f0e Mon Sep 17 00:00:00 2001
+From: Xipz <xipz@192.168.1.107>
+Date: Tue, 20 Oct 2026 16:36:48 +0100
+Subject: [PATCH 8/9] airconv: optional nnan/ninf fast math and
+ threadgroup-scope UAV barriers
+
+---
+ src/airconv/airconv_public.h           | 4 ++++
+ src/airconv/dxbc_converter.cpp         | 6 ++++++
+ src/airconv/dxbc_converter.hpp         | 2 ++
+ src/airconv/nt/dxbc_converter_base.cpp | 4 ++++
+ src/airconv/nt/dxbc_converter_base.hpp | 7 ++++---
+ src/d3d11/d3d11_shader.cpp             | 4 ++++
+ 6 files changed, 24 insertions(+), 3 deletions(-)
+
+diff --git a/src/airconv/airconv_public.h b/src/airconv/airconv_public.h
+index e167ae4..c01d6f4 100644
+--- a/src/airconv/airconv_public.h
++++ b/src/airconv/airconv_public.h
+@@ -237,6 +237,10 @@ enum SM50_SHADER_METAL_VERSION {
+ enum SM50_SHADER_FLAG {
+   SM50_SHADER_FLAG_SAMPLE_NAN_TO_ZERO = 1 << 0,
+   SM50_SHADER_FLAG_DEFUSE_FMA = 1 << 1,
++  /* compute/pixel: also assume no NaN/Inf operands (nnan, ninf), like Metal's default fast math */
++  SM50_SHADER_FLAG_FAST_MATH_NO_NAN_INF = 1 << 2,
++  /* sync_uglobal without any globallycoherent UAV only needs threadgroup-scope visibility */
++  SM50_SHADER_FLAG_UAV_BARRIER_GROUP_SCOPE = 1 << 3,
+ };
+ 
+ struct SM50_SHADER_COMMON_DATA {
+diff --git a/src/airconv/dxbc_converter.cpp b/src/airconv/dxbc_converter.cpp
+index 369a775..0cdcf0b 100644
+--- a/src/airconv/dxbc_converter.cpp
++++ b/src/airconv/dxbc_converter.cpp
+@@ -446,6 +446,9 @@ llvm::Error convert_dxbc_pixel_shader(
+       .shader_type = pShaderInternal->shader_type,
+       .metal_version = metal_version,
+   };
++  ctx.shader_flags = shader_flags;
++  for (auto &[_, uav] : shader_info->uavMap)
++    ctx.has_global_coherent_uav |= uav.global_coherent;
+ 
+   if (auto err = prologue.build(ctx).takeError()) {
+     return err;
+@@ -554,6 +557,9 @@ llvm::Error convert_dxbc_compute_shader(
+       .shader_type = pShaderInternal->shader_type,
+       .metal_version = metal_version,
+   };
++  ctx.shader_flags = shader_flags;
++  for (auto &[_, uav] : shader_info->uavMap)
++    ctx.has_global_coherent_uav |= uav.global_coherent;
+ 
+   if (auto err = prologue.build(ctx).takeError()) {
+     return err;
+diff --git a/src/airconv/dxbc_converter.hpp b/src/airconv/dxbc_converter.hpp
+index a64f6e0..b8f4d83 100644
+--- a/src/airconv/dxbc_converter.hpp
++++ b/src/airconv/dxbc_converter.hpp
+@@ -232,6 +232,8 @@ struct context {
+   uint32_t pso_sample_mask;
+   microsoft::D3D10_SB_TOKENIZED_PROGRAM_TYPE shader_type;
+   SM50_SHADER_METAL_VERSION metal_version;
++  uint32_t shader_flags = 0;
++  bool has_global_coherent_uav = false;
+ };
+ 
+ template <typename S> IRValue make_irvalue(S &&fs) {
+diff --git a/src/airconv/nt/dxbc_converter_base.cpp b/src/airconv/nt/dxbc_converter_base.cpp
+index 58a101c..16f0079 100644
+--- a/src/airconv/nt/dxbc_converter_base.cpp
++++ b/src/airconv/nt/dxbc_converter_base.cpp
+@@ -2943,6 +2943,10 @@ Converter::UseFastMath(bool OptOut) {
+     FMF.setAllowContract();
+     FMF.setAllowReassoc();
+     FMF.setAllowReciprocal();
++    if (ctx.shader_flags & SM50_SHADER_FLAG_FAST_MATH_NO_NAN_INF) {
++      FMF.setNoNaNs();
++      FMF.setNoInfs();
++    }
+   }
+ 
+   FMF.setApproxFunc();
+diff --git a/src/airconv/nt/dxbc_converter_base.hpp b/src/airconv/nt/dxbc_converter_base.hpp
+index c600d3d..eecb1f1 100644
+--- a/src/airconv/nt/dxbc_converter_base.hpp
++++ b/src/airconv/nt/dxbc_converter_base.hpp
+@@ -246,11 +246,12 @@ public:
+     MemFlags mem_flag = sync.tgsm_memory_barrier ? MemFlags::Threadgroup : MemFlags::None;
+     if (sync.uav_boundary != InstSync::UAVBoundary::none) {
+       mem_flag |= MemFlags::Device | MemFlags::Texture;
++      bool device_scope = sync.uav_boundary == InstSync::UAVBoundary::global &&
++                          !((ctx.shader_flags & SM50_SHADER_FLAG_UAV_BARRIER_GROUP_SCOPE) &&
++                            !ctx.has_global_coherent_uav);
+       if (SupportsNonExecutionBarrier())
+         air.CreateAtomicFence(
+-            mem_flag,
+-            (sync.uav_boundary == InstSync::UAVBoundary::global ? (ThreadScope::Device | ThreadScope::Threadgroup)
+-                                                                : ThreadScope::Threadgroup)
++            mem_flag, (device_scope ? (ThreadScope::Device | ThreadScope::Threadgroup) : ThreadScope::Threadgroup)
+         );
+       if (sync.tgsm_execution_barrier)
+         air.CreateBarrier(SupportsNonExecutionBarrier() ? MemFlags::None : mem_flag);
+diff --git a/src/d3d11/d3d11_shader.cpp b/src/d3d11/d3d11_shader.cpp
+index 5b7b742..2d1b263 100644
+--- a/src/d3d11/d3d11_shader.cpp
++++ b/src/d3d11/d3d11_shader.cpp
+@@ -18,6 +18,10 @@ getGlobalShaderFlag() {
+       shader_flag |= SM50_SHADER_FLAG_SAMPLE_NAN_TO_ZERO;
+     if (Config::getInstance().getOption<bool>("d3d11.defuseFma", false))
+       shader_flag |= SM50_SHADER_FLAG_DEFUSE_FMA;
++    if (Config::getInstance().getOption<bool>("d3d11.shaderFastMathNoNaNInf", false))
++      shader_flag |= SM50_SHADER_FLAG_FAST_MATH_NO_NAN_INF;
++    if (Config::getInstance().getOption<bool>("d3d11.uavBarrierGroupScope", false))
++      shader_flag |= SM50_SHADER_FLAG_UAV_BARRIER_GROUP_SCOPE;
+   });
+   return shader_flag;
+ };
+-- 
+2.54.0 (Apple Git-157)
+

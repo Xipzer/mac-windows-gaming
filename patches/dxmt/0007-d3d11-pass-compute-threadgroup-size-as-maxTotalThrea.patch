@@ -1,0 +1,108 @@
+From 2499386046874af699dfbe10b4ef306b4a8e00ff Mon Sep 17 00:00:00 2001
+From: Xipz <xipz@192.168.1.107>
+Date: Tue, 20 Oct 2026 16:35:45 +0100
+Subject: [PATCH 7/9] d3d11: pass compute threadgroup size as
+ maxTotalThreadsPerThreadgroup
+
+---
+ src/d3d11/d3d11_pipeline.cpp        | 7 +++++++
+ src/winemetal/Metal.hpp             | 3 +++
+ src/winemetal/unix/winemetal_unix.c | 2 ++
+ src/winemetal/winemetal.h           | 1 +
+ 4 files changed, 13 insertions(+)
+
+diff --git a/src/d3d11/d3d11_pipeline.cpp b/src/d3d11/d3d11_pipeline.cpp
+index 0d5bc05..f051711 100644
+--- a/src/d3d11/d3d11_pipeline.cpp
++++ b/src/d3d11/d3d11_pipeline.cpp
+@@ -4,6 +4,7 @@
+ #include "d3d11_device.hpp"
+ #include "d3d11_shader.hpp"
+ #include "log/log.hpp"
++#include "config/config.hpp"
+ #include <atomic>
+ #include "util_atomic_wait.hpp"
+ 
+@@ -149,6 +150,10 @@ public:
+                             shader->reflection().ThreadgroupSize[2];
+     // FIXME: might be different on AMD GPU, if it's ever supported
+     tgsize_is_multiple_of_sgwidth = (total_tgsize % 32) == 0;
++    // Telling Metal the real threadgroup size lets the compiler budget registers for it
++    // instead of for 1024 threads.
++    static const bool hint = Config::getInstance().getOption<bool>("d3d11.computeMaxThreadsHint", true);
++    max_total_threads_ = hint ? total_tgsize : 0;
+   }
+ 
+   void GetPipeline(MTL_COMPILED_COMPUTE_PIPELINE *pPipeline) final {
+@@ -172,6 +177,7 @@ public:
+     info.compute_function = cs.Function;
+     info.tgsize_is_multiple_of_sgwidth = tgsize_is_multiple_of_sgwidth;
+     info.immutable_buffers = (1 << 29) | (1 << 30);
++    info.max_total_threads_per_threadgroup = max_total_threads_;
+ 
+     state_ = device_->GetMTLDevice().newComputePipelineState(info, err);
+ 
+@@ -198,6 +204,7 @@ private:
+   CompiledShader *ComputeShader;
+   WMT::Reference<WMT::ComputePipelineState> state_;
+   bool tgsize_is_multiple_of_sgwidth;
++  uint32_t max_total_threads_ = 0;
+ };
+ 
+ std::unique_ptr<MTLCompiledComputePipeline>
+diff --git a/src/winemetal/Metal.hpp b/src/winemetal/Metal.hpp
+index 8224a0c..8848d72 100644
+--- a/src/winemetal/Metal.hpp
++++ b/src/winemetal/Metal.hpp
+@@ -856,6 +856,7 @@ public:
+     info.compute_function = compute_function;
+     info.tgsize_is_multiple_of_sgwidth = false;
+     info.immutable_buffers = 0;
++    info.max_total_threads_per_threadgroup = 0;
+     info.binary_archive_for_serialization = NULL_OBJECT_HANDLE;
+     info.binary_archives_for_lookup.set(nullptr);
+     info.num_binary_archives_for_lookup = 0;
+@@ -870,6 +871,7 @@ public:
+     info.compute_function = compute_function;
+     info.tgsize_is_multiple_of_sgwidth = tgsize_is_multiple_of_sgwidth;
+     info.immutable_buffers = 0;
++    info.max_total_threads_per_threadgroup = 0;
+     info.binary_archive_for_serialization = NULL_OBJECT_HANDLE;
+     info.binary_archives_for_lookup.set(nullptr);
+     info.num_binary_archives_for_lookup = 0;
+@@ -1172,6 +1174,7 @@ InitializeComputePipelineInfo(WMTComputePipelineInfo &info) {
+   info.fail_on_binary_archive_miss = false;
+   info.tgsize_is_multiple_of_sgwidth = false;
+   info.immutable_buffers = 0;
++  info.max_total_threads_per_threadgroup = 0;
+   info.support_indirect_command_buffers = false;
+ }
+ 
+diff --git a/src/winemetal/unix/winemetal_unix.c b/src/winemetal/unix/winemetal_unix.c
+index 3327b29..7ce904f 100644
+--- a/src/winemetal/unix/winemetal_unix.c
++++ b/src/winemetal/unix/winemetal_unix.c
+@@ -377,6 +377,8 @@ _MTLDevice_newComputePipelineState(void *obj) {
+   NSError *err = NULL;
+   descriptor.computeFunction = (id<MTLFunction>)info->compute_function;
+   descriptor.threadGroupSizeIsMultipleOfThreadExecutionWidth = info->tgsize_is_multiple_of_sgwidth;
++  if (info->max_total_threads_per_threadgroup && info->max_total_threads_per_threadgroup <= 1024)
++    descriptor.maxTotalThreadsPerThreadgroup = info->max_total_threads_per_threadgroup;
+   descriptor.supportIndirectCommandBuffers = info->support_indirect_command_buffers;
+   for (unsigned i = 0; i < 31; i++) {
+     if (info->immutable_buffers & (1 << i))
+diff --git a/src/winemetal/winemetal.h b/src/winemetal/winemetal.h
+index 97fffc7..48af2e0 100644
+--- a/src/winemetal/winemetal.h
++++ b/src/winemetal/winemetal.h
+@@ -619,6 +619,7 @@ struct WMTComputePipelineInfo {
+   bool support_indirect_command_buffers;
+   bool tgsize_is_multiple_of_sgwidth;
+   uint32_t immutable_buffers;
++  uint32_t max_total_threads_per_threadgroup; /* 0 = Metal default */
+ };
+ 
+ WINEMETAL_API obj_handle_t MTLDevice_newComputePipelineState(
+-- 
+2.54.0 (Apple Git-157)
+

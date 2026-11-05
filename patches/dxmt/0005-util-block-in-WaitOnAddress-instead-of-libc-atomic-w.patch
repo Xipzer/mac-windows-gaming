@@ -1,0 +1,365 @@
+From c51f51995511ad295268bf787acc44a9692bf92e Mon Sep 17 00:00:00 2001
+From: Xipz <xipz@192.168.1.107>
+Date: Tue, 20 Oct 2026 16:35:24 +0100
+Subject: [PATCH 5/9] util: block in WaitOnAddress instead of libc++ atomic
+ wait polling
+
+---
+ meson.build                       |  5 +++
+ src/d3d11/d3d11_pipeline.cpp      |  9 ++---
+ src/d3d11/d3d11_pipeline_gs.cpp   |  5 +--
+ src/d3d11/d3d11_pipeline_ts.cpp   |  5 +--
+ src/d3d12/d3d12_command_queue.cpp | 11 ++++---
+ src/dxmt/dxmt_command_queue.cpp   | 17 +++++-----
+ src/util/util_atomic_wait.hpp     | 55 +++++++++++++++++++++++++++++++
+ src/util/util_cpu_fence.hpp       |  5 +--
+ 8 files changed, 89 insertions(+), 23 deletions(-)
+ create mode 100644 src/util/util_atomic_wait.hpp
+
+diff --git a/meson.build b/meson.build
+index e10c901..99dcde5 100644
+--- a/meson.build
++++ b/meson.build
+@@ -86,6 +86,11 @@ link_args += [
+   '-Wl,--file-alignment=4096',
+ ]
+ 
++if dxmt_crossbuild
++  # WaitOnAddress / WakeByAddress* (api-ms-win-core-synch-l1-2-0)
++  link_args += [ '-lsynchronization' ]
++endif
++
+ # Wine's built-in back traces only work with dwarf4 symbols
+ if get_option('debug')
+   compiler_args += [
+diff --git a/src/d3d11/d3d11_pipeline.cpp b/src/d3d11/d3d11_pipeline.cpp
+index 8ea32be..0d5bc05 100644
+--- a/src/d3d11/d3d11_pipeline.cpp
++++ b/src/d3d11/d3d11_pipeline.cpp
+@@ -5,6 +5,7 @@
+ #include "d3d11_shader.hpp"
+ #include "log/log.hpp"
+ #include <atomic>
++#include "util_atomic_wait.hpp"
+ 
+ namespace dxmt {
+ 
+@@ -47,7 +48,7 @@ public:
+   }
+ 
+   void GetPipeline(MTL_COMPILED_GRAPHICS_PIPELINE *pPipeline) final {
+-    ready_.wait(false, std::memory_order_acquire);
++    dxmt::atomic_wait(ready_, false, std::memory_order_acquire);
+     *pPipeline = {state_};
+   }
+ 
+@@ -112,7 +113,7 @@ public:
+ 
+   void SetIsDone(bool state) {
+     ready_.store(state);
+-    ready_.notify_all();
++    dxmt::atomic_notify_all(ready_);
+   }
+ 
+ private:
+@@ -151,7 +152,7 @@ public:
+   }
+ 
+   void GetPipeline(MTL_COMPILED_COMPUTE_PIPELINE *pPipeline) final {
+-    ready_.wait(false, std::memory_order_acquire);
++    dxmt::atomic_wait(ready_, false, std::memory_order_acquire);
+     *pPipeline = {state_};
+   }
+ 
+@@ -188,7 +189,7 @@ public:
+ 
+   void SetIsDone(bool state) {
+     ready_.store(state);
+-    ready_.notify_all();
++    dxmt::atomic_notify_all(ready_);
+   }
+ 
+ private:
+diff --git a/src/d3d11/d3d11_pipeline_gs.cpp b/src/d3d11/d3d11_pipeline_gs.cpp
+index efa605e..cfd0acc 100644
+--- a/src/d3d11/d3d11_pipeline_gs.cpp
++++ b/src/d3d11/d3d11_pipeline_gs.cpp
+@@ -21,6 +21,7 @@
+ #include "d3d11_device.hpp"
+ #include "d3d11_pipeline.hpp"
+ #include "log/log.hpp"
++#include "util_atomic_wait.hpp"
+ 
+ namespace dxmt {
+ 
+@@ -63,7 +64,7 @@ public:
+   }
+ 
+   void GetPipeline(MTL_COMPILED_GRAPHICS_PIPELINE *pPipeline) final {
+-    ready_.wait(false, std::memory_order_acquire);
++    dxmt::atomic_wait(ready_, false, std::memory_order_acquire);
+     *pPipeline = {state_mesh_};
+   }
+ 
+@@ -144,7 +145,7 @@ public:
+ 
+   void SetIsDone(bool state) {
+     ready_.store(state);
+-    ready_.notify_all();
++    dxmt::atomic_notify_all(ready_);
+   }
+ 
+ private:
+diff --git a/src/d3d11/d3d11_pipeline_ts.cpp b/src/d3d11/d3d11_pipeline_ts.cpp
+index 8b7f1f3..855d826 100644
+--- a/src/d3d11/d3d11_pipeline_ts.cpp
++++ b/src/d3d11/d3d11_pipeline_ts.cpp
+@@ -24,6 +24,7 @@
+ #include "d3d11_shader.hpp"
+ #include "log/log.hpp"
+ #include "thread.hpp"
++#include "util_atomic_wait.hpp"
+ 
+ namespace dxmt {
+ 
+@@ -91,7 +92,7 @@ public:
+   }
+ 
+   void GetPipeline(MTL_COMPILED_TESSELLATION_MESH_PIPELINE *pPipeline) final {
+-    ready_.wait(false, std::memory_order_acquire);
++    dxmt::atomic_wait(ready_, false, std::memory_order_acquire);
+     *pPipeline = {state_rasterization_, hull_reflection.NumOutputElement,
+                   hull_reflection.ThreadsPerPatch};
+   }
+@@ -188,7 +189,7 @@ public:
+ 
+   void SetIsDone(bool state) {
+     ready_.store(state);
+-    ready_.notify_all();
++    dxmt::atomic_notify_all(ready_);
+   }
+ 
+ private:
+diff --git a/src/d3d12/d3d12_command_queue.cpp b/src/d3d12/d3d12_command_queue.cpp
+index 57b0332..5f4fe1b 100644
+--- a/src/d3d12/d3d12_command_queue.cpp
++++ b/src/d3d12/d3d12_command_queue.cpp
+@@ -26,6 +26,7 @@
+ #include <atomic>
+ #include "d3d10_1.h"
+ #include "d3d11_4.h"
++#include "util_atomic_wait.hpp"
+ 
+ namespace dxmt {
+ 
+@@ -63,7 +64,7 @@ class MTLD3D12CommandQueueImpl : public MTLD3D12Pageable<MTLD3D12CommandQueue, I
+ 
+     uint64_t internal_seq = 1;
+     for (;;) {
+-      inflight_cmdbuf_seq_.wait(internal_seq, std::memory_order_acquire);
++      dxmt::atomic_wait(inflight_cmdbuf_seq_, internal_seq, std::memory_order_acquire);
+       if (inflight_cmdbuf_stop_.load() == internal_seq)
+         break;
+       auto &inflight = inflight_cmdbuf_pool_[internal_seq % kCommandQueueSize];
+@@ -79,7 +80,7 @@ class MTLD3D12CommandQueueImpl : public MTLD3D12Pageable<MTLD3D12CommandQueue, I
+       inflight = {};
+ 
+       inflight_cmdbuf_count_.fetch_sub(1, std::memory_order_release);
+-      inflight_cmdbuf_count_.notify_one();
++      dxmt::atomic_notify_one(inflight_cmdbuf_count_);
+ 
+       internal_seq++;
+     }
+@@ -104,14 +105,14 @@ class MTLD3D12CommandQueueImpl : public MTLD3D12Pageable<MTLD3D12CommandQueue, I
+     ~CommittingScope() {
+       inflight.cmdbuf.commit();
+       queue->inflight_cmdbuf_seq_.fetch_add(1, std::memory_order_release);
+-      queue->inflight_cmdbuf_seq_.notify_one();
++      dxmt::atomic_notify_one(queue->inflight_cmdbuf_seq_);
+       queue->inflight_cmdbuf_count_.fetch_add(1, std::memory_order_relaxed);
+     }
+   };
+ 
+   CommittingScope
+   StartCommitting() {
+-    inflight_cmdbuf_count_.wait(kCommandQueueSize, std::memory_order_acquire);
++    dxmt::atomic_wait(inflight_cmdbuf_count_, kCommandQueueSize, std::memory_order_acquire);
+     return CommittingScope(this);
+   }
+ 
+@@ -123,7 +124,7 @@ public:
+   ~MTLD3D12CommandQueueImpl() {
+     std::lock_guard<dxmt::mutex> lock(mutex_commit_);
+     inflight_cmdbuf_stop_.store(inflight_cmdbuf_seq_.fetch_add(1));
+-    inflight_cmdbuf_seq_.notify_one();
++    dxmt::atomic_notify_one(inflight_cmdbuf_seq_);
+     inflight_cmdbuf_wait_thread_.join();
+   }
+ 
+diff --git a/src/dxmt/dxmt_command_queue.cpp b/src/dxmt/dxmt_command_queue.cpp
+index 89ffc37..328c649 100644
+--- a/src/dxmt/dxmt_command_queue.cpp
++++ b/src/dxmt/dxmt_command_queue.cpp
+@@ -23,6 +23,7 @@
+ #include "util_env.hpp"
+ #include "util_win32_compat.h"
+ #include <atomic>
++#include "util_atomic_wait.hpp"
+ 
+ #define ASYNC_ENCODING 1
+ 
+@@ -76,9 +77,9 @@ CommandQueue::~CommandQueue() {
+   TRACE("Destructing command queue");
+   stopped.store(true);
+   ready_for_encode++;
+-  ready_for_encode.notify_one();
++  dxmt::atomic_notify_one(ready_for_encode);
+   ready_for_commit++;
+-  ready_for_commit.notify_one();
++  dxmt::atomic_notify_one(ready_for_commit);
+   SharedEventListener_destroy(shared_event_listener);
+   encodeThread.join();
+   finishThread.join();
+@@ -102,10 +103,10 @@ CommandQueue::CommitCurrentChunk() {
+   statistics.command_buffer_count++;
+ #if ASYNC_ENCODING
+   ready_for_encode.fetch_add(1, std::memory_order_release);
+-  ready_for_encode.notify_one();
++  dxmt::atomic_notify_one(ready_for_encode);
+ 
+   auto t0 = clock::now();
+-  chunk_ongoing.wait(kCommandChunkCount - 1, std::memory_order_acquire);
++  dxmt::atomic_wait(chunk_ongoing, kCommandChunkCount - 1, std::memory_order_acquire);
+   chunk_ongoing.fetch_add(1, std::memory_order_relaxed);
+   auto t1 = clock::now();
+   statistics.commit_interval += (t1 - t0);
+@@ -161,7 +162,7 @@ CommandQueue::CommitChunkInternal(CommandChunk &chunk, uint64_t seq) {
+   cmdbuf.commit();
+ 
+   ready_for_commit.fetch_add(1, std::memory_order_release);
+-  ready_for_commit.notify_one();
++  dxmt::atomic_notify_one(ready_for_commit);
+ }
+ 
+ uint32_t
+@@ -171,7 +172,7 @@ CommandQueue::EncodingThread() {
+   SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+   uint64_t internal_seq = 1;
+   while (!stopped.load()) {
+-    ready_for_encode.wait(internal_seq, std::memory_order_acquire);
++    dxmt::atomic_wait(ready_for_encode, internal_seq, std::memory_order_acquire);
+     if (stopped.load())
+       break;
+     // perform...
+@@ -190,7 +191,7 @@ CommandQueue::WaitForFinishThread() {
+   SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+   uint64_t internal_seq = 1;
+   while (!stopped.load()) {
+-    ready_for_commit.wait(internal_seq, std::memory_order_acquire);
++    dxmt::atomic_wait(ready_for_commit, internal_seq, std::memory_order_acquire);
+     if (stopped.load())
+       break;
+     auto &chunk = chunks[internal_seq % kCommandChunkCount];
+@@ -212,7 +213,7 @@ CommandQueue::WaitForFinishThread() {
+     chunk.reset();
+     cpu_coherent.signal(internal_seq);
+     chunk_ongoing.fetch_sub(1, std::memory_order_release);
+-    chunk_ongoing.notify_one();
++    dxmt::atomic_notify_one(chunk_ongoing);
+ 
+     staging_allocator.free_blocks(internal_seq);
+     copy_temp_allocator.free_blocks(internal_seq);
+diff --git a/src/util/util_atomic_wait.hpp b/src/util/util_atomic_wait.hpp
+new file mode 100644
+index 0000000..450bd4d
+--- /dev/null
++++ b/src/util/util_atomic_wait.hpp
+@@ -0,0 +1,55 @@
++#pragma once
++
++#include <atomic>
++#include <type_traits>
++
++#ifdef _WIN32
++#include <windows.h>
++#include <synchapi.h>
++#endif
++
++namespace dxmt {
++
++/**
++ * std::atomic::wait in mingw libc++ has no native wait on Windows: it polls with
++ * SwitchToThread and Sleep(elapsed / 2), which burns CPU and oversleeps by up to half
++ * the wait time. These helpers block in WaitOnAddress instead (Wine maps it to
++ * NtWaitForAlertByThreadId).
++ */
++template <typename T>
++inline void
++atomic_wait(const std::atomic<T> &atomic, std::type_identity_t<T> old, std::memory_order order = std::memory_order_seq_cst) {
++#ifdef _WIN32
++  static_assert(sizeof(std::atomic<T>) == sizeof(T), "atomic must be lock-free and unpadded");
++  for (unsigned i = 0; i < 64; i++) {
++    if (atomic.load(order) != old)
++      return;
++  }
++  while (atomic.load(order) == old)
++    WaitOnAddress((volatile void *)&atomic, &old, sizeof(T), INFINITE);
++#else
++  atomic.wait(old, order);
++#endif
++}
++
++template <typename T>
++inline void
++atomic_notify_one(std::atomic<T> &atomic) {
++#ifdef _WIN32
++  WakeByAddressSingle((void *)&atomic);
++#else
++  atomic.notify_one();
++#endif
++}
++
++template <typename T>
++inline void
++atomic_notify_all(std::atomic<T> &atomic) {
++#ifdef _WIN32
++  WakeByAddressAll((void *)&atomic);
++#else
++  atomic.notify_all();
++#endif
++}
++
++} // namespace dxmt
+diff --git a/src/util/util_cpu_fence.hpp b/src/util/util_cpu_fence.hpp
+index 03a7e0c..14c0a84 100644
+--- a/src/util/util_cpu_fence.hpp
++++ b/src/util/util_cpu_fence.hpp
+@@ -1,6 +1,7 @@
+ #pragma once
+ #include <atomic>
+ #include <cstdint>
++#include "util_atomic_wait.hpp"
+ 
+ namespace dxmt {
+ 
+@@ -9,7 +10,7 @@ public:
+   void wait(uint64_t value) {
+     auto current = value_.load(std::memory_order_acquire);
+     while (current < value) {
+-      value_.wait(current);
++      dxmt::atomic_wait(value_, current);
+       current = value_.load(std::memory_order_acquire);
+     }
+   }
+@@ -20,7 +21,7 @@ public:
+       if (value <= current)
+         return;
+     } while (!value_.compare_exchange_weak(current, value, std::memory_order_release, std::memory_order_relaxed));
+-    value_.notify_all();
++    dxmt::atomic_notify_all(value_);
+   }
+ 
+   uint64_t signaledValue() {
+-- 
+2.54.0 (Apple Git-157)
+

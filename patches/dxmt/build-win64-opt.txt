@@ -1,0 +1,21 @@
+[binaries]
+c = 'x86_64-w64-mingw32-gcc'
+cpp = 'x86_64-w64-mingw32-g++'
+ar = 'x86_64-w64-mingw32-llvm-ar'
+strip = 'x86_64-w64-mingw32-strip'
+windres = 'x86_64-w64-mingw32-windres'
+
+[built-in options]
+c_args = ['-march=x86-64-v2', '-mtune=generic', '-fno-semantic-interposition']
+cpp_args = ['-march=x86-64-v2', '-mtune=generic', '-fno-semantic-interposition']
+c_link_args = ['-Wl,--icf=all']
+cpp_link_args = ['-Wl,--icf=all']
+
+[properties]
+needs_exe_wrapper = true
+
+[host_machine]
+system = 'windows'
+cpu_family = 'x86_64'
+cpu = 'x86_64'
+endian = 'little'

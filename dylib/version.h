@@ -1,0 +1,6 @@
+#ifndef STEAMBRIDGE_VERSION_H
+#define STEAMBRIDGE_VERSION_H
+
+#define STEAMBRIDGE_VERSION "1.0.1"
+
+#endif

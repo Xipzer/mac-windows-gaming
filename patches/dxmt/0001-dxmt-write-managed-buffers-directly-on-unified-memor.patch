@@ -1,0 +1,83 @@
+From ec786c15af16c53fe100c472574b33addfcb4326 Mon Sep 17 00:00:00 2001
+From: Xipz <xipz@192.168.1.107>
+Date: Tue, 20 Oct 2026 15:09:50 +0100
+Subject: [PATCH 1/9] dxmt: write managed buffers directly on unified memory
+
+---
+ src/dxmt/dxmt_buffer.cpp | 17 +++++++++++++++++
+ src/dxmt/dxmt_buffer.hpp |  3 ++-
+ 2 files changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/src/dxmt/dxmt_buffer.cpp b/src/dxmt/dxmt_buffer.cpp
+index 9a4139d..42cdf95 100644
+--- a/src/dxmt/dxmt_buffer.cpp
++++ b/src/dxmt/dxmt_buffer.cpp
+@@ -17,6 +17,7 @@
+  */
+ 
+ #include "dxmt_buffer.hpp"
++#include "config/config.hpp"
+ #include "dxmt_format.hpp"
+ #include "thread.hpp"
+ #include "util_likely.hpp"
+@@ -29,6 +30,18 @@ namespace dxmt {
+ 
+ std::atomic_uint64_t global_buffer_seq = {0};
+ 
++// On unified-memory GPUs a managed buffer has a single CPU/GPU copy, so writing through the
++// mapped pointer avoids a unix call (memcpy + didModifyRange) per update.
++static bool
++ManagedDirectWriteAllowed(WMT::Device device) {
++  static const bool allowed = [&] {
++    if (!Config::getInstance().getOption<bool>("dxmt.managedDirectWrite", true))
++      return false;
++    return device.hasUnifiedMemory();
++  }();
++  return allowed;
++}
++
+ BufferAllocation::BufferAllocation(WMT::Device device, const WMTBufferInfo &info, Flags<BufferAllocationFlag> flags) :
+     info_(info),
+     flags_(flags) {
+@@ -48,6 +61,8 @@ BufferAllocation::BufferAllocation(WMT::Device device, const WMTBufferInfo &info
+   obj_ = device.newBuffer(info_);
+   gpuAddress_ = info_.gpu_address;
+   mappedMemory_ = info_.memory.get_accessible_or_null();
++  direct_write_ = mappedMemory_ != nullptr &&
++                  (!flags_.test(BufferAllocationFlag::GpuManaged) || ManagedDirectWriteAllowed(device));
+ };
+ 
+ BufferAllocation::BufferAllocation(
+@@ -68,6 +83,8 @@ BufferAllocation::BufferAllocation(
+   obj_ = heap.newBuffer(info_, heap_offset);
+   gpuAddress_ = info_.gpu_address;
+   mappedMemory_ = info_.memory.get_accessible_or_null();
++  direct_write_ = mappedMemory_ != nullptr &&
++                  (!flags_.test(BufferAllocationFlag::GpuManaged) || ManagedDirectWriteAllowed(device));
+ }
+ 
+ void
+diff --git a/src/dxmt/dxmt_buffer.hpp b/src/dxmt/dxmt_buffer.hpp
+index 057e767..95fc585 100644
+--- a/src/dxmt/dxmt_buffer.hpp
++++ b/src/dxmt/dxmt_buffer.hpp
+@@ -136,7 +136,7 @@ public:
+ 
+   void
+   updateContents(uint64_t offset, const void *data, uint64_t length, uint32_t suballocation = 0) noexcept {
+-    if (likely(mappedMemory_ != nullptr && !flags_.test(BufferAllocationFlag::GpuManaged))) {
++    if (likely(direct_write_)) {
+       memcpy(reinterpret_cast<char *>(mappedMemory_) + suballocation * suballocation_size_ + offset, data, length);
+       return;
+     }
+@@ -167,6 +167,7 @@ private:
+   uint32_t current_suballocation_ = 0;
+   uint32_t suballocation_size_;
+   uint32_t suballocation_count_ = 1;
++  bool direct_write_ = false;
+ 
+   void * placed_buffer = nullptr;
+ };
+-- 
+2.54.0 (Apple Git-157)
+

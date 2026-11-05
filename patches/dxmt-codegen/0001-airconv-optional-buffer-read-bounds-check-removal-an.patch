@@ -1,0 +1,390 @@
+From 8f377956ef6a0ea384e20fd783f34f6a67aecf42 Mon Sep 17 00:00:00 2001
+From: Xipz <xipz@localhost>
+Date: Wed, 21 Oct 2026 00:14:17 +0100
+Subject: [PATCH] airconv: optional buffer read bounds-check removal and
+ vectorized raw/structured buffer access
+
+---
+ src/airconv/airconv_cli.cpp            |   5 +-
+ src/airconv/airconv_public.h           |   7 ++
+ src/airconv/dxbc_converter.cpp         |   9 ++
+ src/airconv/dxbc_converter_gs.cpp      |   6 ++
+ src/airconv/dxbc_converter_ts.cpp      |   6 ++
+ src/airconv/nt/air_builder.hpp         |   8 ++
+ src/airconv/nt/dxbc_converter_base.cpp | 120 ++++++++++++++++++-------
+ src/airconv/nt/dxbc_converter_base.hpp |   9 ++
+ src/d3d11/d3d11_shader.cpp             |   6 ++
+ 9 files changed, 141 insertions(+), 35 deletions(-)
+
+diff --git a/src/airconv/airconv_cli.cpp b/src/airconv/airconv_cli.cpp
+index e9e6573..8330f56 100644
+--- a/src/airconv/airconv_cli.cpp
++++ b/src/airconv/airconv_cli.cpp
+@@ -79,6 +79,9 @@ static cl::opt<bool> PreserveAssemblyUseListOrder(
+ 
+ cl::list<std::string> f("f", cl::Prefix, cl::Hidden);
+ 
++static cl::opt<unsigned>
++  ShaderFlags("shader-flags", cl::init(0), cl::desc("SM50_SHADER_FLAG bits"));
++
+ namespace {
+ 
+ struct LLVMDisDiagnosticHandler : public DiagnosticHandler {
+@@ -217,7 +220,7 @@ int main(int argc, char **argv) {
+ 
+   SM50_SHADER_COMMON_DATA data;
+   data.metal_version = SM50_SHADER_METAL_320;
+-  data.flags = {};
++  data.flags = (SM50_SHADER_FLAG)ShaderFlags.getValue();
+   data.next = 0;
+   data.type = SM50_SHADER_COMMON;
+ 
+diff --git a/src/airconv/airconv_public.h b/src/airconv/airconv_public.h
+index e167ae4..0b01e45 100644
+--- a/src/airconv/airconv_public.h
++++ b/src/airconv/airconv_public.h
+@@ -237,6 +237,13 @@ enum SM50_SHADER_METAL_VERSION {
+ enum SM50_SHADER_FLAG {
+   SM50_SHADER_FLAG_SAMPLE_NAN_TO_ZERO = 1 << 0,
+   SM50_SHADER_FLAG_DEFUSE_FMA = 1 << 1,
++  /* bits 2-3 are used by other private builds; keep them free so cache keys never collide */
++  /* raw/structured/typed buffer reads skip the out-of-bounds check (stores and atomics keep it) */
++  SM50_SHADER_FLAG_NO_BUFFER_READ_BOUNDS_CHECK = 1 << 4,
++  /* 2-4 consecutive dwords of a raw/structured buffer are read with one vector load */
++  SM50_SHADER_FLAG_VECTORIZE_BUFFER_LOADS = 1 << 5,
++  /* same for raw/structured buffer stores */
++  SM50_SHADER_FLAG_VECTORIZE_BUFFER_STORES = 1 << 6,
+ };
+ 
+ struct SM50_SHADER_COMMON_DATA {
+diff --git a/src/airconv/dxbc_converter.cpp b/src/airconv/dxbc_converter.cpp
+index 369a775..ef15fec 100644
+--- a/src/airconv/dxbc_converter.cpp
++++ b/src/airconv/dxbc_converter.cpp
+@@ -406,6 +406,9 @@ llvm::Error convert_dxbc_pixel_shader(
+       {
+           .sampleNaNToZero = bool(shader_flags & SM50_SHADER_FLAG_SAMPLE_NAN_TO_ZERO),
+           .defuseFma = bool(shader_flags & SM50_SHADER_FLAG_DEFUSE_FMA),
++          .noBufferReadBoundsCheck = bool(shader_flags & SM50_SHADER_FLAG_NO_BUFFER_READ_BOUNDS_CHECK),
++          .vectorizeBufferLoads = bool(shader_flags & SM50_SHADER_FLAG_VECTORIZE_BUFFER_LOADS),
++          .vectorizeBufferStores = bool(shader_flags & SM50_SHADER_FLAG_VECTORIZE_BUFFER_STORES),
+       },
+       builder, nulldbg
+   );
+@@ -531,6 +534,9 @@ llvm::Error convert_dxbc_compute_shader(
+       {
+           .sampleNaNToZero = bool(shader_flags & SM50_SHADER_FLAG_SAMPLE_NAN_TO_ZERO),
+           .defuseFma = bool(shader_flags & SM50_SHADER_FLAG_DEFUSE_FMA),
++          .noBufferReadBoundsCheck = bool(shader_flags & SM50_SHADER_FLAG_NO_BUFFER_READ_BOUNDS_CHECK),
++          .vectorizeBufferLoads = bool(shader_flags & SM50_SHADER_FLAG_VECTORIZE_BUFFER_LOADS),
++          .vectorizeBufferStores = bool(shader_flags & SM50_SHADER_FLAG_VECTORIZE_BUFFER_STORES),
+       },
+       builder, nulldbg
+   );
+@@ -733,6 +739,9 @@ llvm::Error convert_dxbc_vertex_shader(
+       {
+           .sampleNaNToZero = bool(shader_flags & SM50_SHADER_FLAG_SAMPLE_NAN_TO_ZERO),
+           .defuseFma = bool(shader_flags & SM50_SHADER_FLAG_DEFUSE_FMA),
++          .noBufferReadBoundsCheck = bool(shader_flags & SM50_SHADER_FLAG_NO_BUFFER_READ_BOUNDS_CHECK),
++          .vectorizeBufferLoads = bool(shader_flags & SM50_SHADER_FLAG_VECTORIZE_BUFFER_LOADS),
++          .vectorizeBufferStores = bool(shader_flags & SM50_SHADER_FLAG_VECTORIZE_BUFFER_STORES),
+       },
+       builder, nulldbg
+   );
+diff --git a/src/airconv/dxbc_converter_gs.cpp b/src/airconv/dxbc_converter_gs.cpp
+index d237b9d..c8fd461 100644
+--- a/src/airconv/dxbc_converter_gs.cpp
++++ b/src/airconv/dxbc_converter_gs.cpp
+@@ -179,6 +179,9 @@ convert_dxbc_geometry_shader(
+       {
+           .sampleNaNToZero = bool(shader_flags & SM50_SHADER_FLAG_SAMPLE_NAN_TO_ZERO),
+           .defuseFma = bool(shader_flags & SM50_SHADER_FLAG_DEFUSE_FMA),
++          .noBufferReadBoundsCheck = bool(shader_flags & SM50_SHADER_FLAG_NO_BUFFER_READ_BOUNDS_CHECK),
++          .vectorizeBufferLoads = bool(shader_flags & SM50_SHADER_FLAG_VECTORIZE_BUFFER_LOADS),
++          .vectorizeBufferStores = bool(shader_flags & SM50_SHADER_FLAG_VECTORIZE_BUFFER_STORES),
+       },
+       builder, nulldbg
+   );
+@@ -619,6 +622,9 @@ convert_dxbc_vertex_for_geometry_shader(
+       {
+           .sampleNaNToZero = bool(shader_flags & SM50_SHADER_FLAG_SAMPLE_NAN_TO_ZERO),
+           .defuseFma = bool(shader_flags & SM50_SHADER_FLAG_DEFUSE_FMA),
++          .noBufferReadBoundsCheck = bool(shader_flags & SM50_SHADER_FLAG_NO_BUFFER_READ_BOUNDS_CHECK),
++          .vectorizeBufferLoads = bool(shader_flags & SM50_SHADER_FLAG_VECTORIZE_BUFFER_LOADS),
++          .vectorizeBufferStores = bool(shader_flags & SM50_SHADER_FLAG_VECTORIZE_BUFFER_STORES),
+       },
+       builder, nulldbg
+   );
+diff --git a/src/airconv/dxbc_converter_ts.cpp b/src/airconv/dxbc_converter_ts.cpp
+index fd32c70..256ae7e 100644
+--- a/src/airconv/dxbc_converter_ts.cpp
++++ b/src/airconv/dxbc_converter_ts.cpp
+@@ -334,6 +334,9 @@ convert_dxbc_vertex_hull_shader(
+       {
+           .sampleNaNToZero = bool(shader_flags & SM50_SHADER_FLAG_SAMPLE_NAN_TO_ZERO),
+           .defuseFma = bool(shader_flags & SM50_SHADER_FLAG_DEFUSE_FMA),
++          .noBufferReadBoundsCheck = bool(shader_flags & SM50_SHADER_FLAG_NO_BUFFER_READ_BOUNDS_CHECK),
++          .vectorizeBufferLoads = bool(shader_flags & SM50_SHADER_FLAG_VECTORIZE_BUFFER_LOADS),
++          .vectorizeBufferStores = bool(shader_flags & SM50_SHADER_FLAG_VECTORIZE_BUFFER_STORES),
+       },
+       builder, nulldbg
+   );
+@@ -873,6 +876,9 @@ convert_dxbc_tesselator_domain_shader(
+       {
+           .sampleNaNToZero = bool(shader_flags & SM50_SHADER_FLAG_SAMPLE_NAN_TO_ZERO),
+           .defuseFma = bool(shader_flags & SM50_SHADER_FLAG_DEFUSE_FMA),
++          .noBufferReadBoundsCheck = bool(shader_flags & SM50_SHADER_FLAG_NO_BUFFER_READ_BOUNDS_CHECK),
++          .vectorizeBufferLoads = bool(shader_flags & SM50_SHADER_FLAG_VECTORIZE_BUFFER_LOADS),
++          .vectorizeBufferStores = bool(shader_flags & SM50_SHADER_FLAG_VECTORIZE_BUFFER_STORES),
+       },
+       builder, nulldbg
+   );
+diff --git a/src/airconv/nt/air_builder.hpp b/src/airconv/nt/air_builder.hpp
+index 509e3bf..9934134 100644
+--- a/src/airconv/nt/air_builder.hpp
++++ b/src/airconv/nt/air_builder.hpp
+@@ -107,6 +107,9 @@ class AIRBuilderOptions {
+ public:
+   bool sampleNaNToZero = false;
+   bool defuseFma = false;
++  bool noBufferReadBoundsCheck = false;
++  bool vectorizeBufferLoads = false;
++  bool vectorizeBufferStores = false;
+ };
+ 
+ class AIRBuilder {
+@@ -118,6 +121,11 @@ public:
+       debug(debug),
+       options(options) {}
+ 
++  const AIRBuilderOptions &
++  getOptions() const {
++    return options;
++  }
++
+   /* Texture Operations */
+ 
+   std::pair<Value *, Value *>
+diff --git a/src/airconv/nt/dxbc_converter_base.cpp b/src/airconv/nt/dxbc_converter_base.cpp
+index 58a101c..f9b3c4d 100644
+--- a/src/airconv/nt/dxbc_converter_base.cpp
++++ b/src/airconv/nt/dxbc_converter_base.cpp
+@@ -1363,7 +1363,8 @@ Converter::operator()(const InstLoad &load) {
+   case Texture::texture_buffer:
+     Address = LoadOperand(load.src_address, kMaskComponentX);
+     Offset = air.getInt(load.offsets[0]);
+-    OOB = ir.CreateICmpUGE(ir.CreateAdd(Address, Offset), DecodeTextureBufferElement(Tex->Metadata));
++    if (!air.getOptions().noBufferReadBoundsCheck)
++      OOB = ir.CreateICmpUGE(ir.CreateAdd(Address, Offset), DecodeTextureBufferElement(Tex->Metadata));
+     Address = ir.CreateAdd(Address, DecodeTextureBufferOffset(Tex->Metadata));
+     break;
+   case Texture::texture1d:
+@@ -1437,7 +1438,8 @@ Converter::operator()(const InstLoadUAVTyped &load) {
+   switch (Tex->Logical) {
+   case Texture::texture_buffer:
+     Address = LoadOperand(load.src_address, kMaskComponentX);
+-    OOB = ir.CreateICmpUGE(Address, DecodeTextureBufferElement(Tex->Metadata));
++    if (!air.getOptions().noBufferReadBoundsCheck)
++      OOB = ir.CreateICmpUGE(Address, DecodeTextureBufferElement(Tex->Metadata));
+     Address = ir.CreateAdd(Address, DecodeTextureBufferOffset(Tex->Metadata));
+     break;
+   case Texture::texture1d:
+@@ -2250,20 +2252,13 @@ Converter::operator()(const InstLoadRaw &load) {
+   auto Index = ir.CreateLShr(LoadOperand(load.src_byte_offset, kMaskComponentX), 2);
+ 
+   if (auto Comp = ComponentFromScalarMask(Mask, Buf->Swizzle); Comp >= 0) {
+-    auto Ptr = CreateGEPInt32WithBoundCheck(Buf.value(), ir.CreateAdd(Index, ir.getInt32(Comp)));
++    auto Ptr = CreateBufferReadPtr(Buf.value(), ir.CreateAdd(Index, ir.getInt32(Comp)), 1);
+     auto ValueInt = Buf->GlobalCoherent ? (llvm::Value *)air.CreateDeviceCoherentLoad(ir.getInt32Ty(), Ptr)
+                                         : (llvm::Value *)ir.CreateLoad(ir.getInt32Ty(), Ptr, Volatile);
+     return StoreOperand(load.dst, MaskSwizzle(ValueInt, Mask));
+   }
+ 
+-  llvm::Value *ValueVec = llvm::PoisonValue::get(air.getIntTy(4));
+-  for (auto [DstComp, _] : EnumerateComponents(MemoryAccessMask(Mask, Buf->Swizzle))) {
+-    auto Ptr = CreateGEPInt32WithBoundCheck(Buf.value(), ir.CreateAdd(Index, ir.getInt32(DstComp)));
+-    auto ValueInt = Buf->GlobalCoherent ? (llvm::Value *)air.CreateDeviceCoherentLoad(ir.getInt32Ty(), Ptr)
+-                                        : (llvm::Value *)ir.CreateLoad(ir.getInt32Ty(), Ptr, Volatile);
+-    ValueVec = ir.CreateInsertElement(ValueVec, ValueInt, DstComp);
+-  }
+-  StoreOperand(load.dst, MaskSwizzle(ValueVec, Mask, Buf->Swizzle));
++  StoreOperand(load.dst, MaskSwizzle(LoadBufferDwords(Buf.value(), Index, MemoryAccessMask(Mask, Buf->Swizzle), Volatile), Mask, Buf->Swizzle));
+ }
+ 
+ void
+@@ -2282,20 +2277,13 @@ Converter::operator()(const InstLoadStructured &load) {
+   auto Index = ir.CreateAdd(IndexStruct, ir.CreateLShr(LoadOperand(load.src_byte_offset, kMaskComponentX), 2));
+ 
+   if (auto Comp = ComponentFromScalarMask(Mask, Buf->Swizzle); Comp >= 0) {
+-    auto Ptr = CreateGEPInt32WithBoundCheck(Buf.value(), ir.CreateAdd(Index, ir.getInt32(Comp)));
++    auto Ptr = CreateBufferReadPtr(Buf.value(), ir.CreateAdd(Index, ir.getInt32(Comp)), 1);
+     auto ValueInt = Buf->GlobalCoherent ? (llvm::Value *)air.CreateDeviceCoherentLoad(ir.getInt32Ty(), Ptr)
+                                         : (llvm::Value *)ir.CreateLoad(ir.getInt32Ty(), Ptr, Volatile);
+     return StoreOperand(load.dst, MaskSwizzle(ValueInt, Mask));
+   }
+ 
+-  llvm::Value *ValueVec = llvm::PoisonValue::get(air.getIntTy(4));
+-  for (auto [DstComp, _] : EnumerateComponents(MemoryAccessMask(Mask, Buf->Swizzle))) {
+-    auto Ptr = CreateGEPInt32WithBoundCheck(Buf.value(), ir.CreateAdd(Index, ir.getInt32(DstComp)));
+-    auto ValueInt = Buf->GlobalCoherent ? (llvm::Value *)air.CreateDeviceCoherentLoad(ir.getInt32Ty(), Ptr)
+-                                        : (llvm::Value *)ir.CreateLoad(ir.getInt32Ty(), Ptr, Volatile);
+-    ValueVec = ir.CreateInsertElement(ValueVec, ValueInt, DstComp);
+-  }
+-  StoreOperand(load.dst, MaskSwizzle(ValueVec, Mask, Buf->Swizzle));
++  StoreOperand(load.dst, MaskSwizzle(LoadBufferDwords(Buf.value(), Index, MemoryAccessMask(Mask, Buf->Swizzle), Volatile), Mask, Buf->Swizzle));
+ }
+ 
+ void
+@@ -2321,13 +2309,7 @@ Converter::operator()(const InstStoreRaw &store) {
+ 
+   auto Value = LoadOperand(store.src, Buf->Mask);
+ 
+-  for (auto [DstComp, _] : EnumerateComponents(Buf->Mask)) {
+-    auto Ptr = CreateGEPInt32WithBoundCheck(Buf.value(), ir.CreateAdd(Index, ir.getInt32(DstComp)));
+-    if (Buf->GlobalCoherent)
+-      air.CreateDeviceCoherentStore(ExtractElement(Value, DstComp), Ptr);
+-    else
+-      ir.CreateStore(ExtractElement(Value, DstComp), Ptr, Volatile);
+-  }
++  StoreBufferDwords(Buf.value(), Index, Value, Volatile);
+ }
+ 
+ void
+@@ -2355,13 +2337,7 @@ Converter::operator()(const InstStoreStructured &store) {
+ 
+   auto Value = LoadOperand(store.src, Buf->Mask);
+ 
+-  for (auto [DstComp, _] : EnumerateComponents(Buf->Mask)) {
+-    auto Ptr = CreateGEPInt32WithBoundCheck(Buf.value(), ir.CreateAdd(Index, ir.getInt32(DstComp)));
+-    if (Buf->GlobalCoherent)
+-      air.CreateDeviceCoherentStore(ExtractElement(Value, DstComp), Ptr);
+-    else
+-      ir.CreateStore(ExtractElement(Value, DstComp), Ptr, Volatile);
+-  }
++  StoreBufferDwords(Buf.value(), Index, Value, Volatile);
+ }
+ 
+ llvm::Value *
+@@ -2926,6 +2902,82 @@ Converter::CreateGEPInt32WithBoundCheck(AtomicBufferResourceHandle &Buffer, llvm
+   );
+ }
+ 
++template <typename Handle>
++llvm::Value *
++Converter::CreateBufferPtrImpl(Handle &Buffer, llvm::Value *Index, unsigned Count, bool BoundCheck) {
++  llvm::Value *Addr = ir.CreateGEP(ir.getInt32Ty(), Buffer.Pointer, {Index});
++  if (Count > 1) {
++    auto AS = cast<llvm::PointerType>(Buffer.Pointer->getType())->getAddressSpace();
++    Addr = ir.CreateBitCast(Addr, air.getIntTy(Count)->getPointerTo(AS));
++  }
++  if (!BoundCheck || !Buffer.Metadata) {
++    return Addr;
++  }
++  auto Last = Count > 1 ? ir.CreateAdd(Index, ir.getInt32(Count - 1)) : Index;
++  auto ByteLength = DecodeRawBufferByteLength(Buffer.Metadata);
++  return ir.CreateSelect(
++      ir.CreateICmpULT(Last, ir.CreateLShr(ByteLength, 2)), Addr, llvm::Constant::getNullValue(Addr->getType())
++  );
++}
++
++llvm::Value *
++Converter::CreateBufferReadPtr(BufferResourceHandle &Buffer, llvm::Value *Index, unsigned Count) {
++  return CreateBufferPtrImpl(Buffer, Index, Count, !air.getOptions().noBufferReadBoundsCheck);
++}
++
++llvm::Value *
++Converter::LoadBufferDwords(BufferResourceHandle &Buffer, llvm::Value *Index, mask_t AccessMask, bool Volatile) {
++  llvm::Value *ValueVec = llvm::PoisonValue::get(air.getIntTy(4));
++  AccessMask &= kMaskAll;
++  if (!AccessMask)
++    return ValueVec;
++  unsigned Lo = __builtin_ctz(AccessMask);
++  unsigned Hi = 31 - __builtin_clz(AccessMask);
++  unsigned Count = Hi - Lo + 1;
++  if (air.getOptions().vectorizeBufferLoads && !Buffer.GlobalCoherent && Count > 1) {
++    // a single <Count x i32> load; only dword alignment is guaranteed by D3D
++    auto Ptr = CreateBufferReadPtr(Buffer, ir.CreateAdd(Index, ir.getInt32(Lo)), Count);
++    auto Loaded = ir.CreateAlignedLoad(air.getIntTy(Count), Ptr, llvm::Align(4), Volatile);
++    llvm::SmallVector<int, 4> Shuffle;
++    for (unsigned I = 0; I < 4; I++)
++      Shuffle.push_back((I >= Lo && I <= Hi) ? int(I - Lo) : -1);
++    return ir.CreateShuffleVector(Loaded, Shuffle);
++  }
++  for (auto [DstComp, _] : EnumerateComponents(AccessMask)) {
++    auto Ptr = CreateBufferReadPtr(Buffer, ir.CreateAdd(Index, ir.getInt32(DstComp)), 1);
++    auto ValueInt = Buffer.GlobalCoherent ? (llvm::Value *)air.CreateDeviceCoherentLoad(ir.getInt32Ty(), Ptr)
++                                          : (llvm::Value *)ir.CreateLoad(ir.getInt32Ty(), Ptr, Volatile);
++    ValueVec = ir.CreateInsertElement(ValueVec, ValueInt, DstComp);
++  }
++  return ValueVec;
++}
++
++void
++Converter::StoreBufferDwords(AtomicBufferResourceHandle &Buffer, llvm::Value *Index, llvm::Value *Value, bool Volatile) {
++  // store masks are always contiguous from x (checked by the caller)
++  unsigned Count = 32 - __builtin_clz(Buffer.Mask & kMaskAll);
++  auto VecTy = dyn_cast<llvm::FixedVectorType>(Value->getType());
++  if (air.getOptions().vectorizeBufferStores && !Buffer.GlobalCoherent && Count > 1 && VecTy &&
++      VecTy->getElementType()->isIntegerTy(32) && VecTy->getNumElements() >= Count) {
++    auto Ptr = CreateBufferPtrImpl(Buffer, Index, Count, true);
++    llvm::SmallVector<int, 4> Shuffle;
++    for (unsigned I = 0; I < Count; I++)
++      Shuffle.push_back(I);
++    llvm::Value *Vec = Value;
++    if (VecTy->getNumElements() != Count)
++      Vec = ir.CreateShuffleVector(Value, Shuffle);
++    ir.CreateAlignedStore(Vec, Ptr, llvm::Align(4), Volatile);
++    return;
++  }
++  for (auto [DstComp, _] : EnumerateComponents(Buffer.Mask)) {
++    auto Ptr = CreateGEPInt32WithBoundCheck(Buffer, ir.CreateAdd(Index, ir.getInt32(DstComp)));
++    if (Buffer.GlobalCoherent)
++      air.CreateDeviceCoherentStore(ExtractElement(Value, DstComp), Ptr);
++    else
++      ir.CreateStore(ExtractElement(Value, DstComp), Ptr, Volatile);
++  }
++}
++
+ std::unique_ptr<llvm::IRBuilder<>::FastMathFlagGuard>
+ Converter::UseFastMath(bool OptOut) {
+   if (OptOut)
+diff --git a/src/airconv/nt/dxbc_converter_base.hpp b/src/airconv/nt/dxbc_converter_base.hpp
+index c600d3d..541e58f 100644
+--- a/src/airconv/nt/dxbc_converter_base.hpp
++++ b/src/airconv/nt/dxbc_converter_base.hpp
+@@ -500,6 +500,15 @@ public:
+ 
+   llvm::Value * CreateGEPInt32WithBoundCheck(AtomicBufferResourceHandle &Buffer, llvm::Value* Index);
+ 
++  template <typename Handle>
++  llvm::Value *CreateBufferPtrImpl(Handle &Buffer, llvm::Value *Index, unsigned Count, bool BoundCheck);
++
++  llvm::Value *CreateBufferReadPtr(BufferResourceHandle &Buffer, llvm::Value *Index, unsigned Count);
++
++  llvm::Value *LoadBufferDwords(BufferResourceHandle &Buffer, llvm::Value *Index, mask_t AccessMask, bool Volatile);
++
++  void StoreBufferDwords(AtomicBufferResourceHandle &Buffer, llvm::Value *Index, llvm::Value *Value, bool Volatile);
++
+   [[nodiscard]]
+   std::unique_ptr<llvm::IRBuilder<>::FastMathFlagGuard> UseFastMath(bool OptOut);
+ 
+diff --git a/src/d3d11/d3d11_shader.cpp b/src/d3d11/d3d11_shader.cpp
+index 5b7b742..11e7242 100644
+--- a/src/d3d11/d3d11_shader.cpp
++++ b/src/d3d11/d3d11_shader.cpp
+@@ -18,6 +18,12 @@ getGlobalShaderFlag() {
+       shader_flag |= SM50_SHADER_FLAG_SAMPLE_NAN_TO_ZERO;
+     if (Config::getInstance().getOption<bool>("d3d11.defuseFma", false))
+       shader_flag |= SM50_SHADER_FLAG_DEFUSE_FMA;
++    if (Config::getInstance().getOption<bool>("d3d11.shaderNoBufferBoundsCheck", false))
++      shader_flag |= SM50_SHADER_FLAG_NO_BUFFER_READ_BOUNDS_CHECK;
++    if (Config::getInstance().getOption<bool>("d3d11.shaderVectorizeBufferLoads", false))
++      shader_flag |= SM50_SHADER_FLAG_VECTORIZE_BUFFER_LOADS;
++    if (Config::getInstance().getOption<bool>("d3d11.shaderVectorizeBufferStores", false))
++      shader_flag |= SM50_SHADER_FLAG_VECTORIZE_BUFFER_STORES;
+   });
+   return shader_flag;
+ };
+-- 
+2.54.0 (Apple Git-157)
+

@@ -1,0 +1,75 @@
+From 6a60570fee638f9022b2125747520914eace0f1e Mon Sep 17 00:00:00 2001
+From: Xipz <xipz@192.168.1.107>
+Date: Tue, 20 Oct 2026 16:40:57 +0100
+Subject: [PATCH 9/9] airconv: move InstSync lowering out of line
+
+---
+ src/airconv/nt/dxbc_converter_base.cpp | 20 ++++++++++++++++++++
+ src/airconv/nt/dxbc_converter_base.hpp | 20 +-------------------
+ 2 files changed, 21 insertions(+), 19 deletions(-)
+
+diff --git a/src/airconv/nt/dxbc_converter_base.cpp b/src/airconv/nt/dxbc_converter_base.cpp
+index 16f0079..11e1182 100644
+--- a/src/airconv/nt/dxbc_converter_base.cpp
++++ b/src/airconv/nt/dxbc_converter_base.cpp
+@@ -2926,6 +2926,26 @@ Converter::CreateGEPInt32WithBoundCheck(AtomicBufferResourceHandle &Buffer, llvm
+   );
+ }
+ 
++void
++Converter::operator()(const InstSync &sync) {
++  using namespace llvm::air;
++  MemFlags mem_flag = sync.tgsm_memory_barrier ? MemFlags::Threadgroup : MemFlags::None;
++  if (sync.uav_boundary != InstSync::UAVBoundary::none) {
++    mem_flag |= MemFlags::Device | MemFlags::Texture;
++    bool device_scope = sync.uav_boundary == InstSync::UAVBoundary::global &&
++                        !((ctx.shader_flags & SM50_SHADER_FLAG_UAV_BARRIER_GROUP_SCOPE) &&
++                          !ctx.has_global_coherent_uav);
++    if (SupportsNonExecutionBarrier())
++      air.CreateAtomicFence(
++          mem_flag, (device_scope ? (ThreadScope::Device | ThreadScope::Threadgroup) : ThreadScope::Threadgroup)
++      );
++    if (sync.tgsm_execution_barrier)
++      air.CreateBarrier(SupportsNonExecutionBarrier() ? MemFlags::None : mem_flag);
++  } else if (sync.tgsm_execution_barrier) {
++    air.CreateBarrier(mem_flag);
++  }
++}
++
+ std::unique_ptr<llvm::IRBuilder<>::FastMathFlagGuard>
+ Converter::UseFastMath(bool OptOut) {
+   if (OptOut)
+diff --git a/src/airconv/nt/dxbc_converter_base.hpp b/src/airconv/nt/dxbc_converter_base.hpp
+index eecb1f1..3e7daae 100644
+--- a/src/airconv/nt/dxbc_converter_base.hpp
++++ b/src/airconv/nt/dxbc_converter_base.hpp
+@@ -240,25 +240,7 @@ public:
+     air.CreateDiscard();
+   }
+ 
+-  void
+-  operator()(const InstSync &sync) {
+-    using namespace llvm::air;
+-    MemFlags mem_flag = sync.tgsm_memory_barrier ? MemFlags::Threadgroup : MemFlags::None;
+-    if (sync.uav_boundary != InstSync::UAVBoundary::none) {
+-      mem_flag |= MemFlags::Device | MemFlags::Texture;
+-      bool device_scope = sync.uav_boundary == InstSync::UAVBoundary::global &&
+-                          !((ctx.shader_flags & SM50_SHADER_FLAG_UAV_BARRIER_GROUP_SCOPE) &&
+-                            !ctx.has_global_coherent_uav);
+-      if (SupportsNonExecutionBarrier())
+-        air.CreateAtomicFence(
+-            mem_flag, (device_scope ? (ThreadScope::Device | ThreadScope::Threadgroup) : ThreadScope::Threadgroup)
+-        );
+-      if (sync.tgsm_execution_barrier)
+-        air.CreateBarrier(SupportsNonExecutionBarrier() ? MemFlags::None : mem_flag);
+-    } else if (sync.tgsm_execution_barrier) {
+-      air.CreateBarrier(mem_flag);
+-    }
+-  }
++  void operator()(const InstSync &sync);
+ 
+   void operator()(const InstMov &);
+   void operator()(const InstMovConditional &);
+-- 
+2.54.0 (Apple Git-157)
+

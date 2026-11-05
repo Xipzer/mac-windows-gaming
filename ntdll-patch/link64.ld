@@ -1,0 +1,10 @@
+SECTIONS {
+  . = CAVE_VA;
+  .cave : {
+    shim64.o(.text)
+    *(.text .text.*)
+    . = ALIGN(8);
+    *(.rodata .rodata.*)
+  }
+  /DISCARD/ : { *(.comment) *(.note.*) *(.llvm_addrsig) *(.eh_frame) *(.bss) *(.data) }
+}

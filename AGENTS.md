@@ -1,96 +1,68 @@
-# AGENTS.md - driving this repo as an AI agent
+# AGENTS.md
 
-How to set up or repair free Windows gaming on Apple Silicon macOS with this repo.
+How to set up, repair and tune Windows gaming on this Mac with this repo.
 
 ## Prime directives
 
-1. **Never delete `steamapps/` or any `steamapps/common/<game>`.** Those are the user's game installs. Cache dirs (`htmlcache`, `appcache/httpcache`, `dumps`) are fine to clear.
-2. **Never redistribute Apple's D3DMetal.** Obtain it on the user's machine (legacy route: `scripts/fetch-d3dmetal.sh`). Never commit or upload any Apple binary.
-3. **Prefer native macOS ports.** Apple Silicon or 64-bit Metal builds usually win, even through Rosetta 2 (`check-compat.sh` knows several).
-4. **EA App games are a hard stop.** Jedi Survivor, NFS Heat, etc. fail under free Wine (`INST-14-1627`). Only paid CrossOver works. Tell the user; don't try to fix it.
-5. **Kernel anti-cheat won't run.** VAC-heavy titles (CS2), EAC, BattlEye. Don't try.
+1. **Never delete `steamapps/` or any `steamapps/common/<game>` or `compatdata/<appid>`.** User installs and saves.
+   Cache dirs (`htmlcache`, `appcache/httpcache`, `dumps`) are fine to clear.
+2. **EA App games are a hard stop.** Jedi Survivor, NFS Heat, ... fail under free Wine (`INST-14-1627`). Only paid CrossOver works. Tell the user; don't try.
+3. **Kernel anti-cheat is a hard stop.** CS2 (VAC), EAC, BattlEye. Don't try.
+4. **Prefer native macOS ports.** Arm64 or 64-bit Metal builds usually win, even under Rosetta 2 (`check-compat.sh --name`).
+5. **Quit Steam before editing `config.vdf` / `localconfig.vdf`.** Steam rewrites them on exit.
+6. **Launch options go after `%command%`** (`%command% STEAMBRIDGE_RETINA=0`). `VAR=1 %command%` fails with `OS Error 260`. Prefer `compatdata/<appid>/steambridge.env`.
+7. **Keep Valve's `steamclient64.dll` in the bridge.** Never replace it with lsteamclient: Steam DRM checks it (`3:0000065432`). The ntdll detour does the rerouting; `.valve` copies sit beside it.
+8. **Never commit Apple binaries** (D3DMetal, GPTk). They are fetched on the machine.
+9. **Don't launch games, restart Steam or run setup scripts unless asked.** Use `scripts/doctor.sh` (read-only) to inspect.
+10. Don't log into Steam/Epic/GOG for the user; never handle credentials.
 
-## Workflow (default: native Steam + free NotProton)
+## Workflow
 
 ```
-1. gather state   -> bash scripts/doctor.sh                 (read-only)
-2. install        -> ./install.sh                           (prereqs, Steam, Heroic, then step 3)
-3. Steam stack    -> bash scripts/setup-notproton.sh        (idempotent; quits Steam first)
-4. per game       -> bash scripts/check-compat.sh <appid>   BEFORE installing
-5. Steam updated, games won't launch -> bash scripts/setup-notproton.sh --skip-build
+1. state       -> bash scripts/doctor.sh                  (read-only, names the fix)
+2. install     -> ./install.sh                            (prereqs, Steam, Heroic, setup.sh, game profiles)
+3. Steam stack -> scripts/setup.sh                        (idempotent; quits Steam first)
+4. new game    -> bash scripts/check-compat.sh <appid>    BEFORE installing
+5. tune        -> compatdata/<appid>/steambridge.env, then save to configs/games/<appid>.env
+6. Steam updated, games won't launch -> scripts/setup.sh --skip-build
 ```
 
-## NotProton invariants
-
-- **Quit Steam** before editing `config.vdf` / `localconfig.vdf`; Steam rewrites them on exit.
-- **Launch options go after `%command%`** (`%command% NOTPROTON_RETINA=0`). `VAR=1 %command%` fails with `OS Error 260`.
-- **Never replace `bridge/steamclient64.dll` with lsteamclient.** Steam DRM needs Valve's file; the ntdll detour does the rerouting. `.valve` copies sit beside them.
-- **Don't run the old wrapper Steam alongside Mac Steam.** Launch with `open -b com.valvesoftware.steam "steam://rungameid/<id>"` so the URL can't reach the wrapper.
-- Steam's EULA / "Play" dialogs can be invisible to screenshots; ask the user to click.
-- Upstream NotProton (CrossOver-only): never strip its licence check while using CrossOver.
-
-## NotProton paths
+## Paths
 
 | What | Path |
 |---|---|
-| Fork | NotProton PR #18 `5b8d186` + `notproton/notproton-free.patch` ([docs/NOTPROTON.md](docs/NOTPROTON.md)) |
-| ntdll detour | `notproton/ntdll-sikarugir11.json` |
-| Runner | `~/Library/Application Support/notproton/runners/sikarugir-11` (`current` symlink) |
-| Bridge | `~/Library/Application Support/notproton/bridge` |
-| Build tree | `~/Library/Caches/notproton-free/src` (no spaces: the fork's Makefile can't handle them) |
-| Steam.app backup | `~/Library/Application Support/notproton-free/backup-*/` |
-| Logs | `steamapps/compatdata/<appid>/notproton-run.log`, `notproton/launchers/<appid>/notproton-wine.log`, `notproton/notproton.log` |
+| Support dir | `~/Library/Application Support/SteamBridge` (runners, bridge, signatures, launchers, helpers) |
+| Runner | `SteamBridge/runners/sikarugir-11` (`current` symlink) |
+| Compat tool | `~/Library/Application Support/Steam/compatibilitytools.d/steambridge` (run script = `dylib/feats/compat_run.sh`) |
+| Injected dylib | `/Applications/Steam.app/Contents/MacOS/steambridge.dylib` (`LSEnvironment:DYLD_INSERT_LIBRARIES`) |
+| Steam.app backup | `SteamBridge/setup/backup-*/` |
+| Per-game profile | `steamapps/compatdata/<appid>/steambridge.env`; tuned copies in `configs/games/` |
+| Logs | `compatdata/<appid>/steambridge-run.log`, `SteamBridge/launchers/<appid>/steambridge-wine.log`, `SteamBridge/steambridge.log` |
 
-## Will this game work?
+## Docs
 
-Run `scripts/check-compat.sh <appid>` (exit 0 works, 2 caveats, 3 blocked, 1 unknown).
-Decision tree and verified games: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+| Doc | Contents |
+|---|---|
+| [docs/LOG.md](docs/LOG.md) | Everything tried, measured and decided. Read before changing tuning |
+| [docs/GAMES.md](docs/GAMES.md) | Per-game entry scripts, routes, settings files |
+| [docs/BENCHMARKS.md](docs/BENCHMARKS.md) | All numbers |
+| [docs/CONFIG.md](docs/CONFIG.md) | Every `steambridge.env` variable |
+| [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) | Decision tree, verified games |
+| [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Symptom, cause, fix |
+| [docs/ENGINES.md](docs/ENGINES.md) | Engines, templates, renderers |
+| [tools/bench/](tools/bench/README.md) | Benchmark and input automation |
+| [legacy/](legacy/README.md) | Old Windows-Steam wrapper route |
 
-## Updating
+## Benchmarking (`tools/bench`)
 
-- NotProton stack: `scripts/setup-notproton.sh --skip-build` (new Steam signatures, re-staged bridge); `--force` rebuilds fork + runner. Pins (fork commit, engine, template, checksums) are at the top of the script.
-- Launchers: `brew upgrade --cask heroic sikarugir` (Heroic also self-updates).
+- The screen must be unlocked and awake: screenshots, OCR and synthetic input fail on a locked screen.
+- **Never raise a game window with AppleScript while it is in menus** (it bounces the game, e.g. to save select).
+- Inputs are real HID key down/up with a hold (`hold.py`, `keyhold.py`); games poll keys per frame.
+- Verify menu state by OCR (`ocr.py`) or highlight (`hl.py`), never by blind key counts.
+- fps: Metal HUD (`MTL_HUD_ENABLED=1`) read by `hudfps.py`. Interleave A/B runs in one session; record in BENCHMARKS.md and LOG.md.
 
-## Do not automate
+## Other stores and routes
 
-- Logging into Steam/Epic/etc. User credentials; never handle them.
-- (Legacy) Sikarugir wrapper *creation*: no headless API, it's a GUI step.
-
-## Legacy: Windows Steam wrapper (`install.sh --legacy-wrapper`)
-
-`setup-steam.sh` applies these fixes:
-
-| # | Fix | Why |
-|---|---|---|
-| 0 | Latest wrapper template (`scripts/update-wrapper.sh`) | Wine 11 engines need template 1.0.16+; older fails with `SikarugirSdk.FileUtilsError error 1` |
-| 1 | Engine `WS12WineSikarugir11.0_1` (Wine 11), fallback `WS12WineSikarugir10.0_8` | GPTk 1.1 (Wine 7) CANNOT run the modern Steam CEF webhelper; it stalls |
-| 2 | Launch target `steam.exe`, not `SteamSetup.exe`: `drive_c/exec*.bat` must contain `"C:\Program Files (x86)\Steam\steam.exe" -tcp` | Wrong target re-runs the installer forever |
-| 3 | `-tcp` flag | Fixes `Unexpected Transport Error (0x3008)` |
-| 4 | D3DMetal: templates bundle it (1.0.21 has 4.0b2); overlay `~/GPTk-D3DMetal/lib/external/` only if NEWER | Never downgrade (setup-steam.sh checks) |
-| 5 | Clear `config/htmlcache`, `appcache/httpcache` before first launch | |
-| 6 | First launch: webhelper rebuild ~30-40s; on `0x3008` dialog choose "VO: Continue Anyway" | |
-
-Paths (computed, never hardcode the username):
-
-```
-Wrapper:      ~/Applications/Sikarugir/<Name>.app
-Wine engine:  <wrapper>/Contents/SharedSupport/wine            (file: version)
-Drive C:      <wrapper>/Contents/SharedSupport/prefix/drive_c
-Steam dir:    <drive_c>/Program Files (x86)/Steam
-Launch bats:  <drive_c>/exec*.bat
-D3DMetal:     <wrapper>/Contents/Frameworks/renderer/d3dmetal/external
-DXMT:         <wrapper>/Contents/Frameworks/renderer/dxmt        (file: version)
-Engine cache: ~/Library/Application Support/Sikarugir/Engines/*.tar.xz
-Extracted D3DMetal: ~/GPTk-D3DMetal/lib/external
-```
-
-`scripts/lib.sh` helpers: `find_wrapper`, `wrapper_wine_dir`, `wrapper_steamdir`, `wrapper_d3dmetal_external`, `wrapper_dxmt_dir`, `kill_wine`, `gh_latest_tag`, `gh_asset_url`.
-
-Engine vs renderer (don't conflate):
-- **Engine** (Wine): Windows/process/CEF. For the Steam client: Sikarugir 11 > Sikarugir 10 > CX24 > GPTk 1.1. Swap with `scripts/swap-engine.sh` (auto-downloads engines).
-- **Renderer**: D3DMetal / DXMT / DXVK, a Configure checkbox, **independent** of the engine. DX12 → D3DMetal. DX10/11 → D3DMetal or DXMT.
-
-Updating:
-- Template: `scripts/update-wrapper.sh` (backs up, keeps SharedSupport).
-- DXMT: `scripts/update-dxmt.sh` (latest release; leaves newer dev builds alone).
-- D3DMetal: re-run `scripts/fetch-d3dmetal.sh` with a newer GPTk DMG, then re-overlay via `setup-steam.sh`.
+- Epic/GOG/Amazon: Heroic (`brew install --cask heroic`), Game-Porting-Toolkit runner from its Wine Manager.
+- Legacy wrapper: `legacy/`. Don't run it alongside Mac Steam; launch Mac Steam games with
+  `open -b com.valvesoftware.steam "steam://rungameid/<id>"`.

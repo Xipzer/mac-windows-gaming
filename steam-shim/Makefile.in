@@ -1,0 +1,14 @@
+MODULE    = steam.exe
+IMPORTS   = $(CXX_PE_LIBS) user32 advapi32 shlwapi shell32 msi ole32
+
+EXTRADLLFLAGS = -mwindows -mcygwin -static-libgcc
+EXTRADEFS = -DWINE_NO_LONG_TYPES -D__WINESRC__ -DPATH_MAX=4096 -include posix_compat.h
+
+EXTRAINCL = \
+	-I$(srcdir)/proton-headers/steamworks_sdk_142 \
+	-I$(srcdir)/proton-headers/openvr/headers \
+	-I$(srcdir)/proton-headers/wine/include
+
+SOURCES = \
+	jsoncpp.cpp \
+	steam.cpp

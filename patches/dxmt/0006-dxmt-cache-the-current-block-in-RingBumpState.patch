@@ -1,0 +1,71 @@
+From db9c2c9c53408bb873a2626b679b3f9d2b1a03ea Mon Sep 17 00:00:00 2001
+From: Xipz <xipz@192.168.1.107>
+Date: Tue, 20 Oct 2026 16:35:30 +0100
+Subject: [PATCH 6/9] dxmt: cache the current block in RingBumpState
+
+---
+ src/dxmt/dxmt_ring_bump_allocator.hpp | 24 +++++++++++++-----------
+ 1 file changed, 13 insertions(+), 11 deletions(-)
+
+diff --git a/src/dxmt/dxmt_ring_bump_allocator.hpp b/src/dxmt/dxmt_ring_bump_allocator.hpp
+index 5c92d92..24cc612 100644
+--- a/src/dxmt/dxmt_ring_bump_allocator.hpp
++++ b/src/dxmt/dxmt_ring_bump_allocator.hpp
+@@ -3,6 +3,7 @@
+ #include "Metal.hpp"
+ #include "log/log.hpp"
+ #include "thread.hpp"
++#include "util_likely.hpp"
+ #include "util_math.hpp"
+ #include <mutex>
+ #include <queue>
+@@ -45,6 +46,8 @@ private:
+   };
+ 
+   std::queue<Allocation> fifo;
++  // always &fifo.back() or nullptr; avoids std::deque::back() index math on every allocation
++  Allocation *latest_ = nullptr;
+   mutex mutex_;
+   Allocator allocator_;
+ };
+@@ -168,20 +171,18 @@ RingBumpState<Allocator, BlockSize, mutex>::allocate(
+     uint64_t seq_id, uint64_t coherent_id, size_t size, size_t alignment
+ ) {
+   std::lock_guard<mutex> lock(mutex_);
+-  while (!fifo.empty()) {
+-    auto &latest = fifo.back();
+-    if ((align(latest.allocated_size, alignment) + size) > latest.total_size) {
+-      break;
++  if (likely(latest_ != nullptr)) {
++    auto &latest = *latest_;
++    if ((align(latest.allocated_size, alignment) + size) <= latest.total_size) {
++      latest.last_used_seq_id = seq_id;
++      return suballocate(latest, size, alignment);
+     }
+-    latest.last_used_seq_id = seq_id;
+-    return suballocate(latest, size, alignment);
+   }
+-  return suballocate(
+-      allocate_or_reuse_block(
+-          seq_id, coherent_id, std::max(size, BlockSize) // in case required size is larger than block size
+-      ),
+-      size, alignment
++  auto &block = allocate_or_reuse_block(
++      seq_id, coherent_id, std::max(size, BlockSize) // in case required size is larger than block size
+   );
++  latest_ = &block;
++  return suballocate(block, size, alignment);
+ };
+ 
+ template <typename Allocator, size_t BlockSize, class mutex>
+@@ -203,6 +204,7 @@ RingBumpState<Allocator, BlockSize, mutex>::free_blocks(uint64_t coherent_id) {
+     front.inc_time_to_live++;
+     break;
+   }
++  latest_ = fifo.empty() ? nullptr : &fifo.back();
+ };
+ 
+ template <typename Allocator, size_t BlockSize, class mutex>
+-- 
+2.54.0 (Apple Git-157)
+
