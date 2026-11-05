@@ -1,0 +1,22 @@
+# SteamBridge
+
+> Native macOS Steam runs Windows games on Apple Silicon: an injected hook library enables Steam Play, and a compatibility tool runs each game with Sikarugir Wine 11 plus D3DMetal or DXMT. Includes tuned per-game profiles and benchmark tools.
+
+## Agents
+
+- [AGENTS.md](AGENTS.md): rules, repo map, how to change and verify
+- [docs/agent/INSTALL.md](docs/agent/INSTALL.md): install runbook for a fresh Mac
+- [docs/agent/OPERATIONS.md](docs/agent/OPERATIONS.md): add a game, updates, benchmarks, logs, uninstall
+- [docs/agent/ARCHITECTURE.md](docs/agent/ARCHITECTURE.md): how the pieces connect
+
+## Docs
+
+- [README.md](README.md): overview, requirements, install
+- [docs/GAMES.md](docs/GAMES.md): compatibility and per-game notes
+- [docs/CONFIG.md](docs/CONFIG.md): per-game variables
+- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md): symptom, cause, fix
+- [docs/BENCHMARKS.md](docs/BENCHMARKS.md): measurements
+- [docs/LOG.md](docs/LOG.md): history and decisions
+- [docs/SOURCES.md](docs/SOURCES.md): versions and upstream links
+- [tools/bench/README.md](tools/bench/README.md): benchmark automation
+- [legacy/README.md](legacy/README.md): old wrapper route
