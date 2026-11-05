@@ -1,8 +1,8 @@
 # sonicfps: Sonic Frontiers FPS unlock without Hedge Mod Manager
 
-`dinput8.dll` is a proxy DLL. It passes every dinput8 call through to Wine's real
-`C:\windows\system32\dinput8.dll`. When the game loads it, it patches the game code in memory.
-The exe on disk is never changed. This is a port of HMMCodes "Disable FPS Limit (experimental)" by NM & RagdollClash:
+`dinput8.dll` is a proxy DLL. It passes every dinput8 call to Wine's real
+`C:\windows\system32\dinput8.dll` and, when the game loads it, patches the game code in memory.
+The exe on disk is never changed. `scripts/apply-game-configs.sh` installs it with the Sonic profile. This is a port of HMMCodes "Disable FPS Limit (experimental)" by NM & RagdollClash:
 https://github.com/hedge-dev/HMMCodes/blob/main/Source/Sonic%20Frontiers/Graphics/Display/Disable%20FPS%20Limit%20(experimental).hmm
 (checked against commit 4de3a9b, 2026-10-13).
 
@@ -30,7 +30,7 @@ echo 'WINEDLLOVERRIDES=dinput8=n,b' >> "$E"
 The run script puts its own overrides in front of this value, so no other entries are needed.
 Optional: copy `sonicfps.ini.example` to `"$G/sonicfps.ini"`, or put any of these in steambridge.env.
 Environment variables override the ini.
-Only `STEAMBRIDGE_*` names reach the game through the run script.
+Use the `STEAMBRIDGE_*` names below; the run script drops unknown prefixes.
 
 - `STEAMBRIDGE_SONICFPS_CAP=120`: cap mode. `0` or unset means unlimited.
 - `STEAMBRIDGE_SONICFPS=0`: turn off the patches but keep the DLL loaded.
@@ -60,5 +60,5 @@ Steam "Verify integrity" does not remove extra files.
 
 ## Build
 
-Run `./build.sh` (mingw-w64, background QoS). The source is in `src/`. `test/harness.exe` checks the
-patch logic under Wine on copies of the real bytes, without starting the game.
+Run `./build.sh` (needs mingw-w64). The source is in `src/`; the result is `out/dinput8.dll`.
+Copy it over `dinput8.dll` in this folder to ship it: `scripts/apply-game-configs.sh` installs that copy.

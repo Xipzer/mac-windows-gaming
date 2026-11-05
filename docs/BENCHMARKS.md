@@ -11,19 +11,19 @@ Each row is 3 runs in one session (shader cache warm). Driven automatically (`to
 | D3DMetal, msync off (old default) | 40 / 40 / 55 | 93 / 83 / 93 | 141 | 31-33% |
 | D3DMetal, msync on | 38-52 | 87-107 | 169 | 2% |
 | D3DMetal, msync on, Game Mode off | 53-56 | 105-109 | 169 | 2% |
-| **DXMT, msync on** | 65-75 | 117-129 | 209 | 2.6% |
-| **DXMT, msync on, AVX off** | **73-77** | **128-131** | 208 | 2.8% |
+| DXMT, msync on | 65-75 | 117-129 | 209 | 2.6% |
+| DXMT, msync on, AVX off | 73-77 | 128-131 | 208 | 2.8% |
 | + WINEDEBUG=-all | 74-77 | 117-130 | 209 | no change |
 | + Steam overlay off | 70-76 | 115-130 | 210 | no change |
 
-Old default to best: **avg 90 -> 130 (+44%), min 45 -> 76 (+69%)**.
+Old default to best: avg 90 -> 130 (+44%), min 45 -> 76 (+69%).
 
 ## 3600×2338 (GPU-bound, 100% GPU)
 
 | Config | Min | Avg | Max |
 |---|---|---|---|
 | D3DMetal, msync on, AVX off | 29-32 | 51 | 70-71 |
-| **DXMT, msync on, AVX off** | 37-38 | 53-55 | 87-88 |
+| DXMT, msync on, AVX off | 37-38 | 53-55 | 87-88 |
 
 ## What each change does
 
@@ -54,7 +54,7 @@ Old default to best: **avg 90 -> 130 (+44%), min 45 -> 76 (+69%)**.
 | 2294x1490 | 58% | 65 | 102 | 180 | 85% | 88% |
 | 2560x1600 (16:10, letterboxed) | 69% | 65 | 94 | 151 | 90% | 91% |
 | 2704x1756 | 80% | 64 | 85 | 131 | 96% | 93% |
-| **3024x1964 (native)** | 100% | 55 | 71 | 124 | 94% | 100% |
+| 3024x1964 (native) | 100% | 55 | 71 | 124 | 94% | 100% |
 | 3600x2338 (downscaled) | 142% | 36 | 51 | 88 | 100% | 109% |
 
 - Below ~2704 wide the minimum stops improving (64-71): the dips are CPU-bound, so fewer pixels only raise the average.
@@ -111,7 +111,7 @@ Batman native 3024x1964, interleaved, 3 runs each (warm runs 2-3):
 |---|---|---|---|
 | Stock DXMT | 40-58 | 71-74 | 118-124 |
 | + vectorized loads/stores | 56-57 | 74 | 130-131 |
-| **+ no read bounds checks** | 57-58 | **74-75** | **130-132** |
+| + no read bounds checks | 57-58 | 74-75 | 130-132 |
 
 Final benchmark frame vs stock: mean pixel difference 0.74 (stock vs stock: 1.04), so no visible change.
 
@@ -120,5 +120,5 @@ Final benchmark frame vs stock: mean pixel difference 0.74 (stock vs stock: 1.04
 | Config | Avg | p10 | GPU |
 |---|---|---|---|
 | Capped (stock) | 56-57 | 53-56 | 75% |
-| **Uncapped, D3DMetal** | **69-82** | 62-69 | 99-100% |
+| Uncapped, D3DMetal | 69-82 | 62-69 | 99-100% |
 | Uncapped, DXMT + codegen | 52-54 | 42-43 | 70-73% |
