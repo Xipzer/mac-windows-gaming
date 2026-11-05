@@ -47,6 +47,7 @@ SteamBridge lets native macOS Steam run Windows games: `steambridge.dylib` is in
 | `configs/games/` | Tuned per-game profiles, `<appid>.env` |
 | `games/sonicfrontiers/` | dinput8 proxy that removes Sonic Frontiers' fps cap |
 | `dylib/` | Hook library injected into Steam; `dylib/feats/compat_run.sh` is the compatibility tool run script (embedded into the dylib at build) |
+| `tests/` | `test_runner_env.py`: sources `assets/runner.env` against a fake runner (Python standard library only) |
 | `assets/` | `runner.env` (renderer selection), ntdll patch spec and applier, `direct-shipping.sh`, DXMT codegen build |
 | `helpers/` | `dispmode` (desktop mode switch), `prio_shim` (wineserver priority), `appinfo` and `iconmaker` (launcher bundle name and icon), `icon.swift` (app icon) |
 | `overlay-shim/` | Optional Metal hook for the Steam overlay in games |
@@ -75,6 +76,7 @@ Runtime paths (`$SB` = `~/Library/Application Support/SteamBridge`): runner `$SB
 |---|---|---|
 | Any `.sh` | `make runcheck scriptcheck` | Each prints a line ending in `parses clean`; needs `shellcheck` (`brew install shellcheck`) |
 | Any `.sh`, same as CI | `git ls-files '*.sh' \| xargs shellcheck -x -S warning` | No output |
+| `assets/runner.env` | `sh -n assets/runner.env && python3 tests/test_runner_env.py` | `OK` |
 | C in `dylib/` | `make all` (needs Dobby: `scripts/setup.sh` fetches it, or see [vendor/README.md](vendor/README.md)) | Builds `out/steambridge.dylib` |
 | `dylib/` behavior | `make compatcheck sigcheck anchorcheck` | Exit 0 (anchorcheck reads the installed Steam client, read only) |
 | Docs | `LC_ALL=C grep -rnI $'\xe2\x80\x93\\|\xe2\x80\x94' --exclude-dir=.git .` (en and em dash) and check every relative link resolves | No output |

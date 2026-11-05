@@ -21,6 +21,7 @@ Rules (from `dylib/feats/compat_run.sh`):
 |---|---|---|
 | `STEAMBRIDGE_RENDERER` | `d3dmetal` | `dxmt` or `dxvk` |
 | `STEAMBRIDGE_D3DMETAL` | `d3dmetal` | `d3dmetal-4.0b3` for the newer D3DMetal build |
+| `STEAMBRIDGE_D9VK` | `1` | `0` runs Direct3D 8 and 9 on Wine's OpenGL renderer instead of DXVK |
 | `STEAMBRIDGE_DXMT` | `dxmt` | `dxmt-codegen` for the build with faster buffer access. Turn its features on with `DXMT_CONFIG=d3d11.shaderVectorizeBufferLoads=True;d3d11.shaderVectorizeBufferStores=True;d3d11.shaderNoBufferBoundsCheck=True` |
 | `DXMT_CONFIG` | unset | DXMT options, `;` separated |
 | `WINEMSYNC` | `1` | `0` uses wineserver sync (slower). Forced to `0` for 32-bit games |
@@ -48,8 +49,9 @@ The priority shim settings gave no measurable gain ([BENCHMARKS.md](BENCHMARKS.m
 | D3DMetal (Apple) | DX11, DX12 to Metal | Default. Best for DX12 |
 | DXMT | DX10, DX11 to Metal | Often faster for DX11 (Arkham Knight +14% avg) |
 | DXVK | DX10, DX11 to Vulkan (MoltenVK) | Fallback |
+| DXVK for DX8/9 | DX8, DX9 to Vulkan (KosmicKrisp) | Automatic for DX8/9 games, next to the renderer above |
 
-DX12: D3DMetal. DX11: benchmark DXMT and D3DMetal. DX9/10: DXMT or DXVK.
+DX12: D3DMetal. DX11: benchmark DXMT and D3DMetal. DX10: DXMT or DXVK. DX8/9: DXVK, or `STEAMBRIDGE_D9VK=0` if a game breaks.
 
 ## Native resolution
 

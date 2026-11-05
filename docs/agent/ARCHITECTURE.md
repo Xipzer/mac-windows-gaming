@@ -65,6 +65,7 @@ Environment, in load order (first set wins unless noted):
    - `dxmt`: `WINEDLLPATH_DXMT=Frameworks/renderer/${STEAMBRIDGE_DXMT:-dxmt}/wine`
    - `dxvk`: `WINEDLLPATH_DXVK=Frameworks/renderer/dxvk/wine`, `DXVK_ASYNC=1`
    - otherwise: `WINEDLLPATH_D3DMETAL` and `WINEDLLPATH_PREPEND` to the D3DMetal `wine` dir
+   - in addition, for Direct3D 8 and 9: `WINEDLLPATH_D9VK=Frameworks/renderer/d9vk/wine` when the `VK_DRIVER_FILES` manifest exists and `STEAMBRIDGE_D9VK` is not `0`. Without it Direct3D 8 and 9 use wined3d over OpenGL
 6. `WINEMSYNC` defaults to 1, forced to 0 for 32-bit (PE32) exes. `MTL_HUD_ENABLED` may come from `compatdata/<appid>/steambridge-hud` (written by `scripts/launch-game.sh --hud`).
 7. `WINEDLLOVERRIDES`: the script's Steam and D3DX overrides, then the user's value. `WINEDEBUG` defaults to `err+all,fixme-all`.
 
