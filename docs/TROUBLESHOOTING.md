@@ -22,7 +22,8 @@ Hooks are working when `steambridge.log` contains `install_thread: ready, N/N ho
 | `steambridge.log` says `signatures ... resolved, installing nothing` | No signature set for this Steam build yet | `scripts/setup.sh --skip-build` fetches the latest sets. If it still fails, wait for upstream signatures |
 | `Application load error 3:0000065432` | Steam DRM found lsteamclient where Valve's `steamclient64.dll` should be | `scripts/setup.sh --skip-build`. If it persists, delete the game's `pfx/drive_c/windows/system32/steamclient64.dll` |
 | Blank dialog text; Wine log says `cannot find the FreeType font library` | Wine lost the runner's library path | `scripts/setup.sh --skip-build` |
-| Game limited to 1800x1169 | Retina mode off | Remove `STEAMBRIDGE_RETINA=0` from launch options and `steambridge.env` |
+| Game limited to 1800x1169 | Retina mode off | Remove `STEAMBRIDGE_RETINA=0` from launch options and `steambridge.env`. If the main screen is 1x, Retina is off by default; set `STEAMBRIDGE_RETINA=1` |
+| Game on a 1x external monitor sees twice the monitor's size | Retina on; Wine scales every screen by one factor | Off by default when the main screen is 1x. Do not force `STEAMBRIDGE_RETINA=1` there |
 | Mouse is offset at native resolution | Wine switched desktop modes mid-session | `STEAMBRIDGE_DESKTOP_MODE=1512x982` (see [CONFIG.md](CONFIG.md#native-resolution)) |
 | `Failed to spawn process`, `OS Error 260`, or a launch option is ignored | Written as `VAR=1 %command%` | Write `%command% VAR=1`, or use `steambridge.env` |
 | Game hangs before its window appears | msync | `WINEMSYNC=0` |

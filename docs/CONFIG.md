@@ -26,7 +26,7 @@ Rules (from `dylib/feats/compat_run.sh`):
 | `DXMT_CONFIG` | unset | DXMT options, `;` separated |
 | `WINEMSYNC` | `1` | `0` uses wineserver sync (slower). Forced to `0` for 32-bit games |
 | `ROSETTA_ADVERTISE_AVX` | `1` | `0` hides AVX from the game. Some games need AVX (Sonic Frontiers) |
-| `STEAMBRIDGE_RETINA` | `1` | `0` limits games to the scaled desktop resolution |
+| `STEAMBRIDGE_RETINA` | `1`, or `0` when the main screen is 1x | `0` limits games to the scaled desktop resolution. `1` on a 1x main screen makes games see twice the real size |
 | `STEAMBRIDGE_DESKTOP_MODE` | unset | `WxH` in points. Switches the desktop to that @2x mode for the session and restores it on exit |
 | `STEAMBRIDGE_GAMEMODE` | `0` | `1` forces macOS Game Mode (needs `gamepolicyctl` from Xcode) |
 | `STEAMBRIDGE_OVERLAY` | `1` | `0` skips the Steam overlay |
