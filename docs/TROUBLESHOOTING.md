@@ -33,6 +33,7 @@ Hooks are working when `steambridge.log` contains `install_thread: ready, N/N ho
 | Unreal launcher spins at 200% CPU (Dragon Ball) | Launcher stub never starts the game | Launch option `"$HOME/Library/Application Support/SteamBridge/direct-shipping.sh" %command%` |
 | "Known issues with graphics driver" box (Unreal) | GPU is not NVIDIA or AMD | Click "No". "Yes" opens a website |
 | DXMT shows a black window | Exclusive fullscreen with map flags | Borderless plus `DXMT_CONFIG=d3d11.ignoreMapFlagNoWait=True`, or use D3DMetal |
+| DirectX 9 game crashes at start or in menus, Wine log shows `d3dx9` | Steam's DirectX install step does not run, so Wine's own `d3dx9` is used | SteamBridge copies the game's own `d3dx9` and `d3dcompiler` DLLs into the prefix. The first launch of a new prefix misses them; launch again. To redo, delete `compatdata/<appid>/steambridge-directx` |
 | Launch seems stuck, nothing on screen | A Steam EULA or Play dialog is behind other windows | Bring Steam to the front |
 | Cloud saves missing | Old prefix with the profile named after the Mac user | Launch once; the run script merges and links the profile |
 | Mac Steam and the legacy wrapper Steam both running | A `steam://` URL opened the wrapper | Quit the wrapper. Launch with `open -b com.valvesoftware.steam "steam://rungameid/<id>"` |

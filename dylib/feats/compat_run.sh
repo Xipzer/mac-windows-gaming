@@ -501,29 +501,9 @@ if [ -d "$bridge_src" ] && [ -n "$WINEPREFIX" ]; then
     export STEAM_COMPAT_CLIENT_INSTALL_PATH="$native_client"
   fi
   install_legacycompat
-  install_directx_redist() {
-    redist_dir="$STEAM_COMPAT_INSTALL_PATH/DirectX_Redist"
-    [ -d "$redist_dir" ] || redist_dir="$STEAM_COMPAT_INSTALL_PATH/_CommonRedist/DirectX/Jun2010"
-    [ -d "$redist_dir" ] || return 0
-    command -v cabextract >/dev/null 2>&1 || return 0
-    wow64_dir="$WINEPREFIX/drive_c/windows/syswow64"
-    [ -d "$wow64_dir" ] || return 0
-    if [ ! -f "$wow64_dir/d3dcompiler_43.dll" ]; then
-      cab=$(find "$redist_dir" -iname "*D3DCompiler_43_x86.cab" 2>/dev/null | head -1)
-      if [ -n "$cab" ]; then
-        cabextract -q -d "$wow64_dir" -F "D3DCompiler_43.dll" "$cab" 2>/dev/null && \
-          echo "=== extracted D3DCompiler_43.dll from $cab ===" >> "$log" 2>&1 || true
-      fi
-    fi
-    if [ ! -f "$wow64_dir/d3dx9_43.dll" ]; then
-      cab=$(find "$redist_dir" -iname "*d3dx9_43_x86.cab" 2>/dev/null | head -1)
-      if [ -n "$cab" ]; then
-        cabextract -q -d "$wow64_dir" -F "d3dx9_43.dll" "$cab" 2>/dev/null && \
-          echo "=== extracted d3dx9_43.dll from $cab ===" >> "$log" 2>&1 || true
-      fi
-    fi
-  }
-  install_directx_redist
+  if [ -s "$STEAM_COMPAT_DATA_PATH/steambridge-directx" ]; then
+    echo "=== native DirectX DLLs from the game's redist: $(sort -u "$STEAM_COMPAT_DATA_PATH/steambridge-directx" | tr '\n' ' ')===" >> "$log" 2>&1 || true
+  fi
   echo "=== bridge staged into $prefix_steam ===" >> "$log" 2>&1 || true
   echo "WINEDLLPATH=$WINEDLLPATH" >> "$log" 2>&1 || true
   echo "STEAM_COMPAT_CLIENT_INSTALL_PATH=$STEAM_COMPAT_CLIENT_INSTALL_PATH" >> "$log" 2>&1 || true
