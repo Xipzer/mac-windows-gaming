@@ -122,3 +122,17 @@ Final benchmark frame vs stock: mean pixel difference 0.74 (stock vs stock: 1.04
 | Capped (stock) | 56-57 | 53-56 | 75% |
 | Uncapped, D3DMetal | 69-82 | 62-69 | 99-100% |
 | Uncapped, DXMT + codegen | 52-54 | 42-43 | 70-73% |
+
+## macOS 27.0.1 round (Nov 5 2026)
+
+All at native resolution, interleaved runs, shared-hardware lock held.
+
+| Test | Off | On | Verdict |
+|---|---|---|---|
+| Dragon Ball, D3DMetal Metal 4 path (`D3DM_MTL4`), title screen | 40 | 33 | Off (default) |
+| Batman, DXMT present deadline + frame-latency fix (`dxmt-codegen2`) | avg 69-81, max 127-132 | avg 67-80, max 119-120 | No gain, caps max near 120 Hz. Not adopted |
+| LEGO, Highball engine with msync vs Sikarugir without msync (Mos Eisley route) | 73-83 | 69-86 | Same (GPU 99-100%). Stays on Sikarugir |
+| LEGO, one-instruction msync thread-exit fix on Sikarugir ntdll.so | | | Did not remove the lock-wait warnings. Dropped |
+
+- Batman on macOS 27: avg 69-81 at native (74-75 on 26.6.2). Same range.
+- LEGO on the Highball engine runs with msync on and no hang.
