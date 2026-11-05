@@ -146,3 +146,4 @@ Measured with the screen's live EDR headroom (`NSScreen.maximumExtendedDynamicRa
 | LEGO Star Wars, `HDREnabled 1` in PCCONFIG.TXT | HDR output on both D3DMetal and DXMT (headroom 2.67). `HDREnabled 0`: 1.00 |
 | Sonic Frontiers | SDR (1.00). HDR has to be turned on in the game's Graphics menu |
 | Batman: Arkham Knight | SDR. The game has no HDR mode |
+| Dragon Ball Sparking! ZERO, `bUseHDRDisplayOutput=True` | SDR on both D3DMetal DX12 and DXMT DX11 (`-dx11` also dropped to 28 fps). Left off |
