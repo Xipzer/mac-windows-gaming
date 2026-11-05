@@ -18,6 +18,10 @@ OBJCOPY=i686-w64-mingw32-objcopy
 CFLAGS="-Os -fno-asynchronous-unwind-tables -ffreestanding -fno-stack-protector \
 -fno-ident -mno-stack-arg-probe"
 
+case "${SB_GATE_BIT:-0x2}" in
+  0x1) CFLAGS="$CFLAGS -DARG_DONT_RESOLVE=0x1 -DLDR_DONT_RESOLVE_REFS=0x40000000" ;;
+esac
+
 "$CC" -c $CFLAGS detour32.c -o detour32_c.o \
   "-DFLAGS_SLOT=$SB_FLAGS_SLOT" "-DLOAD_PATH_SLOT=$SB_LOAD_PATH"
 "$CC" -c -x assembler-with-cpp shim32.S -o shim32.o \

@@ -50,7 +50,7 @@ Expected, near the end:
 
 ```
   ok Built steambridge.dylib (log: .../SteamBridge/setup/build.log)
-  ok ntdll patched (runner + bridge)
+  ok ntdll patched (runner + bridge, 64- and 32-bit)
   ok Steam.app patched and re-signed
   ok Compatibility tool installed
   ok Run script responds
@@ -121,7 +121,7 @@ Tell the human what works and give them: `bash scripts/doctor.sh` for health, `s
 | Game never starts, no run log | `ls "$HOME/Library/Application Support/Steam/compatibilitytools.d/steambridge"` | Missing `run`: `scripts/setup.sh --skip-build`. Present: ask the human to check Properties > Compatibility uses SteamBridge |
 | Run log ends with `=== aborted during <step> ...` | Read the lines above it | Most often a runner or bridge file is missing: `scripts/setup.sh --skip-build` |
 | `Application load error 3:0000065432` | `bash scripts/doctor.sh` (Steam bridge section) | `scripts/setup.sh --skip-build` |
-| Run log: `runner x86_64-windows ntdll is not the patched copy` | `bash scripts/doctor.sh` (Runner section) | `scripts/setup.sh --skip-build` |
+| Run log: `runner x86_64-windows ntdll is not the patched copy` (or `i386-windows`) | `bash scripts/doctor.sh` (Runner section) | `scripts/setup.sh --skip-build` |
 | Game hangs before its window | `grep 'sync:' <run log>` | Add `WINEMSYNC=0` to `compatdata/<appid>/steambridge.env` |
 | Black window with DXMT | `grep renderer= <run log>` | Remove `STEAMBRIDGE_RENDERER=dxmt` (back to D3DMetal) |
 | Nothing x86 runs after a macOS upgrade | `arch -x86_64 /usr/bin/true; echo $?` | `softwareupdate --install-rosetta --agree-to-license` |

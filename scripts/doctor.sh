@@ -54,6 +54,10 @@ if [[ -x "$RUNNER/bin/wine" ]]; then
   nt="$RUNNER/lib/wine/x86_64-windows/ntdll.dll"
   if [[ -f "$nt.steambridge-orig" ]] && ! cmp -s "$nt" "$nt.steambridge-orig"; then ok "ntdll patched"
   else bad "ntdll not patched -> scripts/setup.sh --skip-build"; fi
+  nt32="$RUNNER/lib/wine/i386-windows/ntdll.dll"
+  want="$(sed -n 's/.*"patched_sha256": *"\([^"]*\)".*/\1/p' "$REPO/assets/ntdll-sikarugir11-i386.json")"
+  if [[ -f "$nt32" && "$(shasum -a 256 "$nt32" | cut -d' ' -f1)" == "$want" ]]; then ok "32-bit ntdll patched"
+  else bad "32-bit ntdll not patched, 32-bit games cannot reach Steam -> scripts/setup.sh --skip-build"; fi
   icd="$RUNNER/Resources/vulkan/icd.d/kosmickrisp_mesa_icd.json"
   lib="$(sed -n 's/.*"library_path": *"\([^"]*\)".*/\1/p' "$icd" 2>/dev/null)"
   if [[ -n "$lib" && -f "$(dirname "$icd")/$lib" ]]; then ok "Vulkan driver resolves"

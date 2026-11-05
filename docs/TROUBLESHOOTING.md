@@ -26,6 +26,7 @@ Hooks are working when `steambridge.log` contains `install_thread: ready, N/N ho
 | Mouse is offset at native resolution | Wine switched desktop modes mid-session | `STEAMBRIDGE_DESKTOP_MODE=1512x982` (see [CONFIG.md](CONFIG.md#native-resolution)) |
 | `Failed to spawn process`, `OS Error 260`, or a launch option is ignored | Written as `VAR=1 %command%` | Write `%command% VAR=1`, or use `steambridge.env` |
 | Game hangs before its window appears | msync | `WINEMSYNC=0` |
+| 32-bit game does not connect to Steam | 32-bit ntdll not patched | `scripts/setup.sh --skip-build`; `bash scripts/doctor.sh` should print `32-bit ntdll patched` |
 | 32-bit game deadlocks | WoW64 with msync | The run script already forces `WINEMSYNC=0` for 32-bit exes; check `sync:` in `steambridge-run.log` |
 | Dialog: "This game needs its prefix rebuilt" | The prefix was made by a different Wine architecture | Move the prefix aside (`mv pfx pfx.old` inside `compatdata/<appid>`), launch again, copy saves back from `pfx.old`. Agents: ask first |
 | Unreal launcher spins at 200% CPU (Dragon Ball) | Launcher stub never starts the game | Launch option `"$HOME/Library/Application Support/SteamBridge/direct-shipping.sh" %command%` |

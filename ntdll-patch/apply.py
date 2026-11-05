@@ -3,7 +3,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from resolve import PE, resolve, shell_vars
+from resolve import (IMAGE_SCN_MEM_EXECUTE, SECTION_CHARACTERISTICS_OFFSET,
+                     PE, resolve, shell_vars)
 
 DEFAULT_PAYLOAD = {0x8664: "detour2.bin", 0x14c: "detour32.bin", 0xaa64: "detour64-fex.bin"}
 
@@ -30,9 +31,15 @@ def main():
     d = bytearray(pe.d)
     cave_off = pe.off(payload_rva)
 
+    if len(detour) > int(v['SB_CAVE_ROOM']):
+        raise SystemExit(f"payload is {len(detour)} bytes, the cave holds {v['SB_CAVE_ROOM']}")
     if any(b != fill for b in d[cave_off:cave_off + len(detour)]):
         raise SystemExit(f"cave at {cave_off:#x} is not {fill:#02x} pad for {len(detour)} bytes")
     d[cave_off:cave_off + len(detour)] = detour
+    flags = pe.flags[r['caveSection']]
+    if not flags & IMAGE_SCN_MEM_EXECUTE:
+        at = pe.hdr_off[r['caveSection']] + SECTION_CHARACTERISTICS_OFFSET
+        d[at:at + 4] = (flags | IMAGE_SCN_MEM_EXECUTE).to_bytes(4, 'little')
 
     hooks = []
     for site in sites:
@@ -60,7 +67,7 @@ def main():
 
     print(f"patched {src} -> {dst}")
     print(f"  payload {os.path.basename(payload_path)}, {len(detour)} bytes at rva "
-          f"{payload_rva:#x} (off {cave_off:#x}), cave pad {fill:#02x}")
+          f"{payload_rva:#x} (off {cave_off:#x}) in {r['caveSection']}, cave pad {fill:#02x}")
     for site, bm_off, rel, stolen in hooks:
         print(f"  hook {site['hookRVA']:#x} (off {bm_off:#x}) branch rel {rel:#x} to cave "
               f"entry, stolen {stolen.hex()}")

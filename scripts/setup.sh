@@ -364,7 +364,7 @@ info "Staging the Steam bridge"
 fetch "$UPSTREAM_BRIDGE_ZIP_URL" "$CACHE/bridge-payload-v1.0.1.zip" "$UPSTREAM_BRIDGE_ZIP_SHA"
 pz="$(mktemp -d /tmp/sbz.XXXXXX)"; unzip -q "$CACHE/bridge-payload-v1.0.1.zip" -d "$pz"
 P="$(find "$pz" -type d -path '*payload/bridge' | head -1)"; [[ -n "$P" ]] || die "bridge payload missing from the release zip"
-mkdir -p "$BRIDGE"/{x86_64-windows,i386-windows,x86_64-unix,aarch64-unix,wine/x86_64-windows}
+mkdir -p "$BRIDGE"/{x86_64-windows,i386-windows,x86_64-unix,aarch64-unix,wine/x86_64-windows,wine/i386-windows}
 cp -f "$P/steam.exe" "$BRIDGE/steam.exe"
 cp -f "$P/x86_64-windows-lsteamclient.dll" "$BRIDGE/lsteamclient.dll"
 cp -f "$P/x86_64-windows-lsteamclient.dll" "$BRIDGE/x86_64-windows/lsteamclient.dll"
@@ -392,7 +392,12 @@ nt="$W/x86_64-windows/ntdll.dll"
 cp -f "$nt.steambridge-orig" "$nt"
 python3 "$REPO/assets/apply-ntdll.py" "$REPO/assets/ntdll-sikarugir11.json" "$nt"
 cp -f "$nt" "$BRIDGE/wine/x86_64-windows/ntdll.dll"
-ok "ntdll patched (runner + bridge)"
+nt32="$W/i386-windows/ntdll.dll"
+[[ -f "$nt32.steambridge-orig" ]] || cp -p "$nt32" "$nt32.steambridge-orig"
+cp -f "$nt32.steambridge-orig" "$nt32"
+python3 "$REPO/assets/apply-ntdll.py" "$REPO/assets/ntdll-sikarugir11-i386.json" "$nt32"
+cp -f "$nt32" "$BRIDGE/wine/i386-windows/ntdll.dll"
+ok "ntdll patched (runner + bridge, 64- and 32-bit)"
 
 info "Injecting SteamBridge into Steam.app"
 if [[ -z "$(steam_backup)" ]]; then

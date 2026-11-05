@@ -48,10 +48,10 @@ SteamBridge lets native macOS Steam run Windows games: `steambridge.dylib` is in
 | `games/sonicfrontiers/` | dinput8 proxy that removes Sonic Frontiers' fps cap |
 | `dylib/` | Hook library injected into Steam; `dylib/feats/compat_run.sh` is the compatibility tool run script (embedded into the dylib at build) |
 | `tests/` | `test_runner_env.py`: sources `assets/runner.env` against a fake runner (Python standard library only) |
-| `assets/` | `runner.env` (renderer selection), ntdll patch spec and applier, `direct-shipping.sh`, DXMT codegen build |
+| `assets/` | `runner.env` (renderer selection), ntdll patch specs (64- and 32-bit) and applier, `direct-shipping.sh`, DXMT codegen build |
 | `helpers/` | `dispmode` (desktop mode switch), `prio_shim` (wineserver priority), `appinfo` and `iconmaker` (launcher bundle name and icon), `icon.swift` (app icon) |
 | `overlay-shim/` | Optional Metal hook for the Steam overlay in games |
-| `ntdll-patch/` | Source of the ntdll detour that reroutes Valve's `steamclient64.dll` to lsteamclient |
+| `ntdll-patch/` | Source of the ntdll detour that reroutes Valve's `steamclient64.dll` (and `steamclient.dll` for 32-bit games) to lsteamclient; `build-sikarugir11-i386.sh` rebuilds `assets/ntdll-sikarugir11-i386.json` |
 | `lsteamclient/`, `steam-shim/`, `bridge/` | Steam API bridge sources, Valve DLL fetcher (`bridge/fetch-valve.sh`) |
 | `signatures/macos.arm64/` | Hook signature sets per Steam build |
 | `patches/` | DXMT patches (`dxmt-codegen` is shipped) |

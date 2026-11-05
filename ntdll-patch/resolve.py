@@ -5,6 +5,10 @@ from capstone import x86 as X86, arm64 as A64
 ARCH = {0x8664: 'x86_64-windows', 0x14c: 'i386-windows', 0xaa64: 'aarch64-windows'}
 
 PAYLOAD = {0x8664: 864, 0x14c: 1376, 0xaa64: 868}
+SECTION_CHARACTERISTICS_OFFSET = 36
+IMAGE_SCN_MEM_DISCARDABLE = 0x02000000
+IMAGE_SCN_MEM_EXECUTE = 0x20000000
+IMAGE_SCN_MEM_WRITE = 0x80000000
 
 PINNED = {
     '04c7200b6645decb7c2d1ba6b0195abc9af83257072558d11aa72cc067ac3377':
@@ -62,13 +66,18 @@ class PE:
         wide = self.magic == 0x20b
         self.imagebase = (struct.unpack_from('<Q', self.d, self.opt + 24)[0] if wide
                           else struct.unpack_from('<I', self.d, self.opt + 28)[0])
+        self.salign = struct.unpack_from('<I', self.d, self.opt + 32)[0]
         self.secs = []
+        self.hdr_off = {}
+        self.flags = {}
         for i in range(nsec):
             o = e + 24 + optsz + i * 40
             name = self.d[o:o + 8].rstrip(b'\0').decode('latin1')
             vsize, vrva, rsize, roff = struct.unpack_from('<IIII', self.d, o + 8)
             if roff:
                 self.secs.append((name, vrva, vsize, roff, rsize))
+                self.hdr_off[name] = o
+                self.flags[name] = struct.unpack_from('<I', self.d, o + SECTION_CHARACTERISTICS_OFFSET)[0]
         self.dirs = self.opt + (112 if wide else 96)
 
     def sec(self, prefix):
@@ -118,9 +127,17 @@ class PE:
         return out
 
     def cave(self):
-        _, vrva, vsize, roff, rsize = self.sec('.text')
-        end = vrva + vsize
-        return {'caveRVA': end, 'caveSize': (vrva + rsize) - end, 'fill': self.d[roff + vsize]}
+        def tail(s):
+            name, vrva, vsize, roff, rsize = s
+            mapped = -(-vsize // self.salign) * self.salign
+            return {'caveRVA': vrva + vsize, 'caveSize': max(min(rsize, mapped) - vsize, 0),
+                    'fill': self.d[roff + vsize] if rsize > vsize else 0, 'caveSection': name}
+        text = tail(self.sec('.text'))
+        if payload_slot(text)[1] >= PAYLOAD[self.machine]:
+            return text
+        ro = [tail(s) for s in self.secs
+              if not self.flags[s[0]] & (IMAGE_SCN_MEM_DISCARDABLE | IMAGE_SCN_MEM_WRITE)]
+        return max(ro, key=lambda t: t['caveSize'])
 
     def string_refs(self, name):
         _, rvrva, _, rroff, rrsize = self.sec('.rdata')
@@ -254,7 +271,7 @@ def resolve_i386(pe):
     for k in range(anchor - 1, max(anchor - 24, 0), -1):
         i = body[k]
         if i.mnemonic == 'test' and i.operands and i.operands[-1].type == X86.X86_OP_IMM \
-                and i.operands[-1].imm == 2:
+                and i.operands[-1].imm in (1, 2):
             gate = k
             break
     if gate is None:
@@ -304,7 +321,7 @@ def resolve_i386(pe):
             'insn': ' ; '.join(f"{i.mnemonic} {i.op_str}" for i in taken),
             'load_path': load_path, 'skip': skip, 'stole_branch': stole_branch,
             'stolen_head': b''.join(i.bytes for i in (taken[:-1] if stole_branch else taken)).hex(),
-            'flags_slot': flags_slot}
+            'flags_slot': flags_slot, 'gate_bit': body[gate].operands[-1].imm}
 
 
 def aarch64_walk(md, text, tv):
@@ -589,10 +606,14 @@ def ntdlls(arg):
     raise SystemExit(f"{arg}: no <arch>-windows/ntdll.dll under it")
 
 
+def payload_slot(cave):
+    payload = (cave['caveRVA'] + 15) & ~15
+    return payload, cave['caveSize'] - (payload - cave['caveRVA'])
+
+
 def shell_vars(path):
     r = resolve(path)
-    payload = (r['caveRVA'] + 15) & ~15
-    room = r['caveSize'] - (payload - r['caveRVA'])
+    payload, room = payload_slot(r)
     need = PAYLOAD[r['machine']]
     if room < need:
         raise SystemExit(f"{path}: cave has {room} bytes at {payload:#x}, payload needs {need}")
@@ -610,6 +631,7 @@ def shell_vars(path):
         'SB_CAVE_RVA': f"{r['caveRVA']:#x}", 'SB_CAVE_SIZE': str(r['caveSize']),
         'SB_PAYLOAD_RVA': f"{payload:#x}", 'SB_PAYLOAD_VA': f"{r['imageBase'] + payload:#x}",
         'SB_CAVE_ROOM': str(room), 'SB_FILL': f"{r['fill']:#04x}",
+        'SB_CAVE_SECTION': r['caveSection'],
     }
     if PINNED.get(r['sha256'], {}).get('payload'):
         out['SB_PAYLOAD_SHA256'] = PINNED[r['sha256']]['payload']
@@ -619,6 +641,8 @@ def shell_vars(path):
         out['SB_STOLEN_HEAD_BYTES'] = ','.join(
             f"0x{b:02x}" for b in bytes.fromhex(r['stolen_head']))
         out['SB_FLAGS_SLOT'] = ('%#x' if r['flags_slot'] >= 0 else '-%#x') % abs(r['flags_slot'])
+        if r.get('gate_bit') is not None:
+            out['SB_GATE_BIT'] = f"{r['gate_bit']:#x}"
 
     for n, s in enumerate(r.get('sites') or [], 1):
         out[f'SB_HOOK_RVA_{n}'] = f"{s['hookRVA']:#x}"
