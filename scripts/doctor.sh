@@ -54,6 +54,10 @@ if [[ -x "$RUNNER/bin/wine" ]]; then
   nt="$RUNNER/lib/wine/x86_64-windows/ntdll.dll"
   if [[ -f "$nt.steambridge-orig" ]] && ! cmp -s "$nt" "$nt.steambridge-orig"; then ok "ntdll patched"
   else bad "ntdll not patched -> scripts/setup.sh --skip-build"; fi
+  icd="$RUNNER/Resources/vulkan/icd.d/kosmickrisp_mesa_icd.json"
+  lib="$(sed -n 's/.*"library_path": *"\([^"]*\)".*/\1/p' "$icd" 2>/dev/null)"
+  if [[ -n "$lib" && -f "$(dirname "$icd")/$lib" ]]; then ok "Vulkan driver resolves"
+  else bad "Vulkan driver missing or unresolvable -> scripts/setup.sh --skip-build"; fi
   r="$(find "$RUNNER/Frameworks/renderer" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort | tr '\n' ' ')"
   log "  renderers: ${r:-none}"
 else

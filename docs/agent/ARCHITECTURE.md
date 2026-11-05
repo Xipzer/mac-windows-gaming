@@ -27,7 +27,7 @@ In order:
 4. Build, unless `--skip-build`: clones Dobby at the pinned commit into `vendor/dobby`, `make dobby`, then `make all helpers-install sigdb-install`. Output `out/steambridge.dylib`; `iconmaker`, `appinfo` and `signatures/macos.arm64/*.json` go to `$SB`. Log: `$SB/setup/build.log`.
 5. Builds `helpers/dispmode.c` to `$SB/dispmode` and `helpers/prio_shim.c` to `$SB/prio-shim.dylib`.
 6. Downloads extra signature sets from the NotProton repo into `$SB/signatures/macos.arm64`.
-7. Runner, only if missing or `--force`: Wine engine tarball plus the template's `Frameworks` (renderers, GStreamer, MoltenVK) and `vulkan`. Adds `Frameworks/renderer/d3dmetal-4.0b3` (template 1.0.24) and `Frameworks/renderer/dxmt-codegen` (`assets/renderers/dxmt-codegen.tar.xz`). Always copies `assets/runner.env` to `$RUNNER/runner.env`, and `assets/direct-shipping.sh` to `$SB`.
+7. Runner, only if missing or `--force`: Wine engine tarball plus the template's `Frameworks` (renderers, GStreamer, MoltenVK) and the Vulkan driver manifests in `Resources/vulkan` (their `library_path` of `../../../Frameworks` only resolves from there; an older runner's top-level `vulkan` dir is moved there on every run). Adds `Frameworks/renderer/d3dmetal-4.0b3` (template 1.0.24) and `Frameworks/renderer/dxmt-codegen` (`assets/renderers/dxmt-codegen.tar.xz`). Always copies `assets/runner.env` to `$RUNNER/runner.env`, and `assets/direct-shipping.sh` to `$SB`.
 8. Bridge: unpacks the pinned NotProton release (`steam.exe`, lsteamclient DLLs and `.so`) into `$SB/bridge` and into the runner's `lib/wine/*`. Runs `bridge/fetch-valve.sh --install` to download Valve's Windows DLLs listed in `app/Sources/SteamBridgeApp/Resources/valve-packages.manifest`, then keeps `steamclient64.dll.valve` and `steamclient.dll.valve` copies.
 9. ntdll: saves `lib/wine/x86_64-windows/ntdll.dll` as `ntdll.dll.steambridge-orig`, applies `assets/ntdll-sikarugir11.json` with `assets/apply-ntdll.py` (SHA-256 checked before and after), copies the result to `$SB/bridge/wine/x86_64-windows/ntdll.dll`.
 10. Steam.app: one-time backup, copies the dylib to `Contents/MacOS/steambridge.dylib`, sets `LSEnvironment:DYLD_INSERT_LIBRARIES` in `Contents/Info.plist`, ad-hoc re-signs, re-registers with LaunchServices.
@@ -61,7 +61,7 @@ Environment, in load order (first set wins unless noted):
 2. `compatdata/<appid>/steambridge.env`: same prefixes, only names not already set, `#` lines skipped.
 3. `STEAMBRIDGE_ARGS` is appended to the game arguments (verb `waitforexitandrun` only).
 4. Run script defaults: `D3DM_ENABLE_METALFX=1`, `ROSETTA_ADVERTISE_AVX=1`, `STEAMBRIDGE_RENDERER=d3dmetal`; `CX_ROOT=$SB/runners/current`; Wine loader, server and DLL paths.
-5. `$CX_ROOT/runner.env` (from `assets/runner.env`) is sourced. It sets library paths, picks the D3DMetal build from `STEAMBRIDGE_D3DMETAL`, and selects the renderer:
+5. `$CX_ROOT/runner.env` (from `assets/runner.env`) is sourced. It sets library paths and `VK_DRIVER_FILES` (`Resources/vulkan/icd.d/kosmickrisp_mesa_icd.json`), picks the D3DMetal build from `STEAMBRIDGE_D3DMETAL`, and selects the renderer:
    - `dxmt`: `WINEDLLPATH_DXMT=Frameworks/renderer/${STEAMBRIDGE_DXMT:-dxmt}/wine`
    - `dxvk`: `WINEDLLPATH_DXVK=Frameworks/renderer/dxvk/wine`, `DXVK_ASYNC=1`
    - otherwise: `WINEDLLPATH_D3DMETAL` and `WINEDLLPATH_PREPEND` to the D3DMetal `wine` dir

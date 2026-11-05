@@ -335,8 +335,12 @@ if (( FORCE )) || [[ ! -x "$RUNNER/bin/wine" ]]; then
   rm -rf "$RUNNER"; mkdir -p "$RUNNER"
   ditto "$tmp/wswine.bundle" "$RUNNER"
   ditto "$T/Frameworks" "$RUNNER/Frameworks"
-  if [[ -d "$T/Resources/vulkan" ]]; then ditto "$T/Resources/vulkan" "$RUNNER/vulkan"; fi
+  if [[ -d "$T/Resources/vulkan" ]]; then ditto "$T/Resources/vulkan" "$RUNNER/Resources/vulkan"; fi
   ok "Runner: $("$RUNNER/bin/wine" --version 2>/dev/null) + Template-${TEMPLATE} libraries"
+fi
+if [[ -d "$RUNNER/vulkan" && ! -d "$RUNNER/Resources/vulkan" ]]; then
+  mkdir -p "$RUNNER/Resources"; mv "$RUNNER/vulkan" "$RUNNER/Resources/vulkan"
+  ok "Vulkan driver manifests moved to Resources/vulkan"
 fi
 if [[ ! -d "$RUNNER/Frameworks/renderer/d3dmetal-4.0b3" ]]; then
   info "Adding D3DMetal 4.0b3 from Template-${TEMPLATE_B3}"
