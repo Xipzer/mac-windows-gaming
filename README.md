@@ -94,3 +94,8 @@ Files:
 - Wine output: `~/Library/Application Support/SteamBridge/launchers/<appid>/steambridge-wine.log`
 - Hook library: `~/Library/Application Support/SteamBridge/steambridge.log`
 - Installer: `~/Library/Application Support/SteamBridge/setup/build.log`
+
+## License
+
+Free for personal, hobby, research and other noncommercial use under the [PolyForm Noncommercial License 1.0.0](LICENSE).
+You may not sell it or use it in a paid product or service without written permission.
