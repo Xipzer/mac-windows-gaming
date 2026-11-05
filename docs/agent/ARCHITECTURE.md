@@ -9,7 +9,7 @@ How a Windows game starts from Mac Steam. Every fact here comes from the files n
 | `$SB` | `~/Library/Application Support/SteamBridge` |
 | Steam data | `~/Library/Application Support/Steam` |
 | Compat tool | `~/Library/Application Support/Steam/compatibilitytools.d/steambridge/` |
-| Runner | `$SB/runners/sikarugir-11`, linked as `$SB/runners/current` |
+| Runner | `$SB/runners/sikarugir-11`, linked as `$SB/runners/current`; optional `$SB/runners/highball-11` (`STEAMBRIDGE_RUNNER=highball-11`) |
 | Bridge | `$SB/bridge` |
 | Prefix | `steamapps/compatdata/<appid>/pfx` |
 | Per-game launcher bundle | `$SB/launchers/<appid>/<Game name>.app` |
@@ -25,11 +25,12 @@ In order:
 2. Migrates an older `notproton` install to the SteamBridge names (`--migrate` stops after this).
 3. Rosetta 2, build tools, cmake. Quits Steam (`steam_osx`).
 4. Build, unless `--skip-build`: clones Dobby at the pinned commit into `vendor/dobby`, `make dobby`, then `make all helpers-install sigdb-install`. Output `out/steambridge.dylib`; `iconmaker`, `appinfo` and `signatures/macos.arm64/*.json` go to `$SB`. Log: `$SB/setup/build.log`.
-5. Builds `helpers/dispmode.c` to `$SB/dispmode` and `helpers/prio_shim.c` to `$SB/prio-shim.dylib`.
+5. Builds `helpers/dispmode.c` to `$SB/dispmode` and `helpers/prio_shim.c` to `$SB/prio-shim.dylib`, and `vendor/audiobuf/audiobuf.c` to `$SB/audiobuf.dylib`.
 6. Downloads extra signature sets from the NotProton repo into `$SB/signatures/macos.arm64`.
 7. Runner, only if missing or `--force`: Wine engine tarball plus the template's `Frameworks` (renderers, GStreamer, MoltenVK) and `vulkan`. Adds `Frameworks/renderer/d3dmetal-4.0b3` (template 1.0.24) and `Frameworks/renderer/dxmt-codegen` (`assets/renderers/dxmt-codegen.tar.xz`). Always copies `assets/runner.env` to `$RUNNER/runner.env`, and `assets/direct-shipping.sh` to `$SB`.
 8. Bridge: unpacks the pinned NotProton release (`steam.exe`, lsteamclient DLLs and `.so`) into `$SB/bridge` and into the runner's `lib/wine/*`. Runs `bridge/fetch-valve.sh --install` to download Valve's Windows DLLs listed in `app/Sources/SteamBridgeApp/Resources/valve-packages.manifest`, then keeps `steamclient64.dll.valve` and `steamclient.dll.valve` copies.
 9. ntdll: saves `lib/wine/x86_64-windows/ntdll.dll` as `ntdll.dll.steambridge-orig`, applies `assets/ntdll-sikarugir11.json` with `assets/apply-ntdll.py` (SHA-256 checked before and after), copies the result to `$SB/bridge/wine/x86_64-windows/ntdll.dll`.
+   With `STEAMBRIDGE_INSTALL_HIGHBALL=1`: downloads the pinned Highball r31 engine to `$SB/runners/highball-11`, clones the Sikarugir runner's `Frameworks` and `vulkan`, copies lsteamclient, applies `assets/ntdll-highball11-r31.json`, copies the result to `$SB/bridge/wine-highball-11/x86_64-windows/ntdll.dll`. `runners/current` is not changed.
 10. Steam.app: one-time backup, copies the dylib to `Contents/MacOS/steambridge.dylib`, sets `LSEnvironment:DYLD_INSERT_LIBRARIES` in `Contents/Info.plist`, ad-hoc re-signs, re-registers with LaunchServices.
 11. Compat tool: writes `compatibilitytool.vdf` (name `steambridge`, windows to macos), `toolmanifest.vdf` (`/run %verb%`) and `run` (a copy of `dylib/feats/compat_run.sh`).
 12. Unless `--no-default`: backs up `config/config.vdf` and sets `CompatToolMapping` entry `"0"` to `steambridge`, making it the default for all Windows games.
@@ -60,11 +61,12 @@ Environment, in load order (first set wins unless noted):
 1. Launch-option words after `%command%` that look like `NAME=value` with an allowed prefix (`STEAMBRIDGE_`, `WINE`, `D3DM_`, `DXMT_`, `DXVK_`, `MTL_`, `ROSETTA_`, `CX_GRAPHICS`) are exported and removed from the arguments.
 2. `compatdata/<appid>/steambridge.env`: same prefixes, only names not already set, `#` lines skipped.
 3. `STEAMBRIDGE_ARGS` is appended to the game arguments (verb `waitforexitandrun` only).
-4. Run script defaults: `D3DM_ENABLE_METALFX=1`, `ROSETTA_ADVERTISE_AVX=1`, `STEAMBRIDGE_RENDERER=d3dmetal`; `CX_ROOT=$SB/runners/current`; Wine loader, server and DLL paths.
+4. Run script defaults: `D3DM_ENABLE_METALFX=1`, `ROSETTA_ADVERTISE_AVX=1`, `STEAMBRIDGE_RENDERER=d3dmetal`; `CX_ROOT=$SB/runners/${STEAMBRIDGE_RUNNER:-current}` (exits if that runner has no Wine loader); Wine loader, server and DLL paths.
 5. `$CX_ROOT/runner.env` (from `assets/runner.env`) is sourced. It sets library paths, picks the D3DMetal build from `STEAMBRIDGE_D3DMETAL`, and selects the renderer:
    - `dxmt`: `WINEDLLPATH_DXMT=Frameworks/renderer/${STEAMBRIDGE_DXMT:-dxmt}/wine`
    - `dxvk`: `WINEDLLPATH_DXVK=Frameworks/renderer/dxvk/wine`, `DXVK_ASYNC=1`
-   - otherwise: `WINEDLLPATH_D3DMETAL` and `WINEDLLPATH_PREPEND` to the D3DMetal `wine` dir
+   - otherwise: `WINEDLLPATH_D3DMETAL` to the D3DMetal `wine` dir
+   - every case also sets `WINEDLLPATH_PREPEND` (the only name the Highball engine reads; Sikarugir ignores it). For D3DMetal it is the D3DMetal dir then the DXMT dir, so 32-bit D3D10/11 uses DXMT on Highball
 6. `WINEMSYNC` defaults to 1, forced to 0 for 32-bit (PE32) exes. `MTL_HUD_ENABLED` may come from `compatdata/<appid>/steambridge-hud` (written by `scripts/launch-game.sh --hud`).
 7. `WINEDLLOVERRIDES`: the script's Steam and D3DX overrides, then the user's value. `WINEDEBUG` defaults to `err+all,fixme-all`.
 
@@ -74,9 +76,10 @@ Then, with `WINEPREFIX=compatdata/<appid>/pfx`:
 2. `wineserver -k`. If `STEAMBRIDGE_DESKTOP_MODE=WxH`: `$SB/dispmode set W H`, the previous mode saved to `$SB/desktop-home`. If `STEAMBRIDGE_PRIO=1`: starts wineserver with `$SB/prio-shim.dylib` injected.
 3. Profile layout for cloud saves: creates `drive_c/users/steamuser`, merges the Mac-user profile into it, moves the original to `compatdata/<appid>/steambridge-profile-backup-<user>`, and links `users/<mac user>` to `steamuser`.
 4. `wineboot --init`; registry: no crash dialogs, `RetinaMode` (from `STEAMBRIDGE_RETINA`), `steam://` handler.
-5. Bridge staging: copies the bridge files (Valve `steamclient64.dll`, `steamclient.dll`, tier0/vstdlib, lsteamclient, `steam.exe`) into `pfx/drive_c/Program Files (x86)/Steam`, removes stale DLLs there, checks that the runner ntdll matches the bridge copy, installs lsteamclient triggers in `system32`/`syswow64`, extracts D3DX/D3DCompiler from the game's DirectX redist if `cabextract` exists.
+   Controllers: unless `STEAMBRIDGE_STEAMINPUT=0`, the pads in Steam's `SDL_GAMECONTROLLER_IGNORE_DEVICES` (minus `..._EXCEPT`) and Switch Pro/Joy-Cons get `WineBus\Devices\<vid>/<pid>` `Hidraw=0`; the ids SteamBridge owns are kept in `compatdata/<appid>/steambridge-hidden-controllers`. `STEAMBRIDGE_DISABLE_HIDRAW=1` sets `WineBus` `DisableHidraw=1`. A change restarts wineserver. Ported from NotProton 98d2929, 950059d, 3e1293f.
+5. Bridge staging: copies the bridge files (Valve `steamclient64.dll`, `steamclient.dll`, tier0/vstdlib, lsteamclient, `steam.exe`) into `pfx/drive_c/Program Files (x86)/Steam`, removes stale DLLs there, checks that the runner ntdll matches the bridge copy (`$SB/bridge/wine-<runner>` if present, else `$SB/bridge/wine`), installs lsteamclient triggers in `system32`/`syswow64`, extracts D3DX/D3DCompiler from the game's DirectX redist if `cabextract` exists.
 6. Targets outside the game folder (installers, redists) run directly on the Wine loader. `iscriptevaluator.exe` is skipped.
-7. The game: builds `$SB/launchers/<appid>/<Game>.app` (name and icon from Steam's `appinfo.vdf` via `$SB/appinfo` and `$SB/iconmaker`). Its `launcher` script sets the library path, injects `$SB/overlay-shim.dylib` (if present) and Steam's overlay, logs to `steambridge-wine.log`, and runs `wine "C:\Program Files (x86)\Steam\steam.exe" <game exe> <args>`. The bundle is started with `open -n -W -a` and every relevant variable passed with `--env`. A bundle gives the game its own Dock icon and allows Game Mode.
+7. The game: builds `$SB/launchers/<appid>/<Game>.app` (name and icon from Steam's `appinfo.vdf` via `$SB/appinfo` and `$SB/iconmaker`). Its `launcher` script sets the library path, injects `$SB/overlay-shim.dylib` (if present), Steam's overlay and, with `STEAMBRIDGE_AUDIOBUF=1`, `$SB/audiobuf.dylib` (`vendor/audiobuf`), logs to `steambridge-wine.log`, and runs `wine "C:\Program Files (x86)\Steam\steam.exe" <game exe> <args>`. The bundle is started with `open -n -W -a` and every relevant variable passed with `--env`. A bundle gives the game its own Dock icon and allows Game Mode.
 8. On exit or signal: Game Mode back to auto, `wineserver -k` and `-w`, desktop mode restored, leftover prefix processes killed. Run log: `compatdata/<appid>/steambridge-run.log`.
 
 ## 4. Steam API bridge and the ntdll detour
