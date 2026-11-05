@@ -47,7 +47,7 @@ case "$verb" in
 esac
 
 LEGACY_OVERLAY_SHIM_ENV=NOTPROTON_OVERLAY_SHIM
-CX_ROOT="$HOME/Library/Application Support/SteamBridge/runners/current"
+CX_ROOT="$HOME/Library/Application Support/SteamBridge/runners/${STEAMBRIDGE_RUNNER:-current}"
 export CX_ROOT
 
 if [ -d "$CX_ROOT/Contents/Resources/wine" ]; then
