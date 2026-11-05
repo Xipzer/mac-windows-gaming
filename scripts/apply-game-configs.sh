@@ -29,8 +29,8 @@ PY
 fi
 L="$C/920210/$U/AppData/Roaming/Warner Bros. Interactive Entertainment/LEGO Star Wars - The Skywalker Saga/PCCONFIG.TXT"
 if [ -f "$L" ]; then
-  perl -pi -e 's/^(ScreenWidth|WindowWidth)(\s+)\d+/$1${2}3024/; s/^(ScreenHeight|WindowHeight)(\s+)\d+/$1${2}1964/; s/^(ScreenRefreshRate\s+)\d+/${1}120/; s/^(VerticalSyncMode\s+)\d+/${1}0/' "$L"
-  ok "LEGO 3024x1964, 120 Hz, V-Sync off"
+  perl -pi -e 's/^(ScreenWidth|WindowWidth)(\s+)\d+/$1${2}3024/; s/^(ScreenHeight|WindowHeight)(\s+)\d+/$1${2}1964/; s/^(ScreenRefreshRate\s+)\d+/${1}120/; s/^(VerticalSyncMode\s+)\d+/${1}0/; s/^(HDREnabled\s+)\d+/${1}1/' "$L"
+  ok "LEGO 3024x1964, 120 Hz, V-Sync off, HDR on"
 fi
 X="$C/1237320/$U/AppData/Roaming/SEGA/SonicFrontiers/steam/x64/screen_setting.xml"
 if [ -f "$X" ]; then

@@ -136,3 +136,13 @@ All at native resolution, interleaved runs, shared-hardware lock held.
 
 - Batman on macOS 27: avg 69-81 at native (74-75 on 26.6.2). Same range.
 - LEGO on the Highball engine runs with msync on and no hang.
+
+## HDR (Nov 5 2026)
+
+Measured with the screen's live EDR headroom (`NSScreen.maximumExtendedDynamicRangeColorComponentValue`, 1.0 = SDR).
+
+| Game | Result |
+|---|---|
+| LEGO Star Wars, `HDREnabled 1` in PCCONFIG.TXT | HDR output on both D3DMetal and DXMT (headroom 2.67). `HDREnabled 0`: 1.00 |
+| Sonic Frontiers | SDR (1.00). HDR has to be turned on in the game's Graphics menu |
+| Batman: Arkham Knight | SDR. The game has no HDR mode |
