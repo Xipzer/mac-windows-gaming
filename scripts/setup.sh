@@ -17,6 +17,9 @@ TEMPLATE="1.0.21"
 TEMPLATE_SHA="bbe996e4e4375318485953d0c7818b7b4b0a4dc1f13303bcc584f99f7602f78d"
 TEMPLATE_B3="1.0.24"
 TEMPLATE_B3_SHA="4b5f89eeb9ef139936bdfad33d9b420b05ea4597cb7d63376674f7a8e171321c"
+HB_ENGINE_TAG="engine-wine-11.0-20261104T101332Z-wine11-sse-0025-0029-concrt140"
+HB_ENGINE_URL="https://github.com/gauthierpiarrette/highball-engine/releases/download/${HB_ENGINE_TAG}/${HB_ENGINE_TAG}.tar.gz"
+HB_ENGINE_SHA="f217d9c61660f9a0da16c5650675be8c8c908f75738c6daa8d1faee1081ac570"
 
 STEAM_APP="/Applications/Steam.app"
 AS="$HOME/Library/Application Support"
@@ -25,6 +28,7 @@ STATE="$SB/setup"
 CACHE="$HOME/Library/Caches/steambridge/downloads"
 BUILD_COPY="$HOME/Library/Caches/steambridge/build"
 RUNNER="$SB/runners/sikarugir-11"
+HB_RUNNER="$SB/runners/highball-11"
 BRIDGE="$SB/bridge"
 STEAM_DIR="$AS/Steam"
 COMPAT="$STEAM_DIR/compatibilitytools.d/steambridge"
@@ -76,7 +80,7 @@ for a in "$@"; do
   case "$a" in
     --force) FORCE=1;; --no-default) SET_DEFAULT=0;; --skip-build) SKIP_BUILD=1;;
     --uninstall) UNINSTALL=1;; --migrate) MIGRATE_ONLY=1;;
-    -h|--help) printf '%s\n' "Usage: setup.sh [--force] [--skip-build] [--no-default] [--migrate] [--uninstall]" "  --force       rebuild the runner and the hook library" "  --skip-build  reuse the existing build (after a Steam update)" "  --no-default  do not make SteamBridge the default for Windows games" "  --migrate     only migrate an older install to SteamBridge names" "  --uninstall   restore stock Steam.app and remove the compatibility tool"; exit 0;;
+    -h|--help) printf '%s\n' "Usage: setup.sh [--force] [--skip-build] [--no-default] [--migrate] [--uninstall]" "  --force       rebuild the runner and the hook library" "  --skip-build  reuse the existing build (after a Steam update)" "  --no-default  do not make SteamBridge the default for Windows games" "  --migrate     only migrate an older install to SteamBridge names" "  --uninstall   restore stock Steam.app and remove the compatibility tool" "Environment: STEAMBRIDGE_INSTALL_HIGHBALL=1 also installs the Highball Wine 11 runner as runners/highball-11"; exit 0;;
     *) die "unknown option $a";;
   esac
 done
@@ -314,8 +318,11 @@ clang -O2 -Wall -arch arm64 -arch x86_64 -framework ApplicationServices \
   "$REPO/helpers/dispmode.c" -o "$SB/dispmode"
 clang -arch x86_64 -O2 -Wall -dynamiclib -mmacosx-version-min=11.0 \
   -install_name @rpath/prio-shim.dylib "$REPO/helpers/prio_shim.c" -o "$SB/prio-shim.dylib"
-codesign -fs - "$SB/dispmode" "$SB/prio-shim.dylib" 2>/dev/null
-ok "Helpers: dispmode, prio-shim"
+clang -arch x86_64 -arch arm64 -O2 -dynamiclib -mmacosx-version-min=14.0 \
+  -install_name @rpath/audiobuf.dylib "$REPO/vendor/audiobuf/audiobuf.c" -o "$SB/audiobuf.dylib" \
+  -framework AudioToolbox -framework CoreAudio
+codesign -fs - "$SB/dispmode" "$SB/prio-shim.dylib" "$SB/audiobuf.dylib" 2>/dev/null
+ok "Helpers: dispmode, prio-shim, audiobuf (STEAMBRIDGE_AUDIOBUF=1)"
 
 sigdir="$SB/signatures/macos.arm64"; mkdir -p "$sigdir"
 for u in $(curl -fsSL "$UPSTREAM_SIGNATURES_API" 2>/dev/null | sed -n 's/.*"download_url": *"\([^"]*\.json\)".*/\1/p'); do
@@ -399,6 +406,42 @@ python3 "$REPO/assets/apply-ntdll.py" "$REPO/assets/ntdll-sikarugir11-i386.json"
 cp -f "$nt32" "$BRIDGE/wine/i386-windows/ntdll.dll"
 ok "ntdll patched (runner + bridge, 64- and 32-bit)"
 
+if [[ "${STEAMBRIDGE_INSTALL_HIGHBALL:-0}" == 1 ]]; then
+  info "Assembling the Highball Wine 11 runner (STEAMBRIDGE_RUNNER=highball-11, runners/current unchanged)"
+  if (( FORCE )) || [[ ! -x "$HB_RUNNER/bin/wine" ]]; then
+    fetch "$HB_ENGINE_URL" "$CACHE/highball-${HB_ENGINE_TAG}.tar.gz" "$HB_ENGINE_SHA"
+    th="$(mktemp -d /tmp/sbh.XXXXXX)"
+    tar -xzf "$CACHE/highball-${HB_ENGINE_TAG}.tar.gz" -C "$th" ./engine
+    [[ -x "$th/engine/bin/wine" && -d "$th/engine/lib/wine/x86_64-windows" ]] || die "Unexpected Highball engine layout"
+    rm -rf "$HB_RUNNER"; mkdir -p "$HB_RUNNER"
+    ditto "$th/engine" "$HB_RUNNER"; rm -rf "$th"
+    find "$HB_RUNNER/bin" "$HB_RUNNER/lib/wine/x86_64-unix" -type f -exec sh -c \
+      'for f; do file -b "$f" | grep -q Mach-O && codesign -f -s - "$f" 2>/dev/null; done; true' sh {} +
+  fi
+  rm -rf "$HB_RUNNER/Frameworks" "$HB_RUNNER/vulkan" "$HB_RUNNER/Resources/vulkan"
+  cp -cR "$RUNNER/Frameworks" "$HB_RUNNER/Frameworks" 2>/dev/null || ditto "$RUNNER/Frameworks" "$HB_RUNNER/Frameworks"
+  if [[ -d "$RUNNER/Resources/vulkan" ]]; then
+    mkdir -p "$HB_RUNNER/Resources"
+    cp -cR "$RUNNER/Resources/vulkan" "$HB_RUNNER/Resources/vulkan" 2>/dev/null || ditto "$RUNNER/Resources/vulkan" "$HB_RUNNER/Resources/vulkan"
+  fi
+  cp -f "$REPO/assets/runner.env" "$HB_RUNNER/runner.env"
+  HW="$HB_RUNNER/lib/wine"
+  cp -f "$W/x86_64-windows/lsteamclient.dll" "$HW/x86_64-windows/lsteamclient.dll"
+  if [[ -f "$W/i386-windows/lsteamclient.dll" && -d "$HW/i386-windows" ]]; then
+    cp -f "$W/i386-windows/lsteamclient.dll" "$HW/i386-windows/lsteamclient.dll"
+  fi
+  cp -f "$W/x86_64-unix/lsteamclient.so" "$HW/x86_64-unix/lsteamclient.so"
+  ln -sf lsteamclient.so "$HW/x86_64-unix/steamclient.so"; ln -sf lsteamclient.so "$HW/x86_64-unix/steamclient64.so"
+  codesign -f -s - "$HW/x86_64-unix/lsteamclient.so" 2>/dev/null
+  hnt="$HW/x86_64-windows/ntdll.dll"
+  [[ -f "$hnt.steambridge-orig" ]] || cp -p "$hnt" "$hnt.steambridge-orig"
+  cp -f "$hnt.steambridge-orig" "$hnt"
+  python3 "$REPO/assets/apply-ntdll.py" "$REPO/assets/ntdll-highball11-r31.json" "$hnt"
+  mkdir -p "$BRIDGE/wine-highball-11/x86_64-windows"
+  cp -f "$hnt" "$BRIDGE/wine-highball-11/x86_64-windows/ntdll.dll"
+  ok "Highball runner at $HB_RUNNER (per game: STEAMBRIDGE_RUNNER=highball-11)"
+fi
+
 info "Injecting SteamBridge into Steam.app"
 if [[ -z "$(steam_backup)" ]]; then
   bk="$STATE/backup-$(date +%Y%m%d%H%M%S)"; mkdir -p "$bk"; ditto "$STEAM_APP" "$bk/Steam.app"
@@ -469,3 +512,5 @@ info "Done. Start Steam:  open -a Steam"
 log "  Windows games now have a Play button. First launch of each game builds its prefix (about 30 s)."
 log "  Per-game options go AFTER %command% in Launch Options, e.g.  %command% STEAMBRIDGE_RETINA=0"
 log "  After a Steam client update breaks launching, re-run:  $0 --skip-build"
+log "  Steam was re-signed, so macOS may drop its Input Monitoring grant (Steam Input). If controllers stop"
+log "  working, re-enable Steam in System Settings > Privacy & Security > Input Monitoring."

@@ -49,6 +49,8 @@ Hooks are working when `steambridge.log` contains `install_thread: ready, N/N ho
 | `INST-14-1627` "The EA app encountered an error" | EA games need the EA App, which fails under free Wine | None free. Paid CrossOver only |
 | Multiplayer game will not start or bans you | Kernel anti-cheat | None |
 | Slow motion or fast forward | Game speed tied to frame rate | Lock 60 fps |
+| Controller works on the desktop but not in games after `scripts/setup.sh` | Re-signing Steam.app drops its Input Monitoring grant, which Steam Input needs | System Settings > Privacy & Security > Input Monitoring: remove Steam, add it again, restart Steam |
+| Pad shows up twice in a game, or Steam Input bindings are ignored | Wine reads the pad directly next to Steam's virtual one | Keep `STEAMBRIDGE_STEAMINPUT=1` (default). The run log line `controllers: N kept off hidraw` lists how many were hidden |
 | Stutter on first play | Shader compilation | Goes away after the first level. To force a rebuild: `rm -rf "$(getconf DARWIN_USER_CACHE_DIR)/d3dm/<GAME>/shaders.cache"` |
 
 ## Heroic (Epic, GOG, Amazon)

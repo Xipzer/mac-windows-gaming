@@ -11,7 +11,7 @@ while [ "$argi" -lt "$argc" ]; do
   arg="$1"
   shift
   case "$arg" in
-    CX_GRAPHICS*=*|D3DM_*=*|DXMT_*=*|DXVK_*=*|MTL_*=*|STEAMBRIDGE_*=*|ROSETTA_*=*|WINE*=*)
+    CX_GRAPHICS*=*|D3DM_*=*|DXMT_*=*|DXVK_*=*|HB_AUDIO*=*|MTL_*=*|STEAMBRIDGE_*=*|ROSETTA_*=*|WINE*=*)
       export "$arg"
       launch_env="$launch_env $arg"
       ;;
@@ -24,7 +24,7 @@ if [ -n "$STEAM_COMPAT_DATA_PATH" ] && [ -r "$STEAM_COMPAT_DATA_PATH/steambridge
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
       ''|'#'*) continue ;;
-      CX_GRAPHICS*=*|D3DM_*=*|DXMT_*=*|DXVK_*=*|MTL_*=*|STEAMBRIDGE_*=*|ROSETTA_*=*|WINE*=*)
+      CX_GRAPHICS*=*|D3DM_*=*|DXMT_*=*|DXVK_*=*|HB_AUDIO*=*|MTL_*=*|STEAMBRIDGE_*=*|ROSETTA_*=*|WINE*=*)
         name=${line%%=*}
         eval "isset=\${$name+x}"
         if [ -z "$isset" ]; then
@@ -49,6 +49,7 @@ esac
 LEGACY_OVERLAY_SHIM_ENV=NOTPROTON_OVERLAY_SHIM
 CX_ROOT="$HOME/Library/Application Support/SteamBridge/runners/${STEAMBRIDGE_RUNNER:-current}"
 export CX_ROOT
+runner_name=$(cd "$CX_ROOT" 2>/dev/null && basename "$(pwd -P)") || runner_name=""
 
 if [ -d "$CX_ROOT/Contents/Resources/wine" ]; then
   CX_ROOT="$CX_ROOT/Contents/Resources/wine"
@@ -117,6 +118,13 @@ report_early_exit() {
     >> "$log" 2>&1 || true
 }
 trap report_early_exit EXIT
+
+stage_step="runner check"
+if [ -z "$runner_name" ] || [ ! -x "$WINELOADER" ]; then
+  echo "=== runner ${STEAMBRIDGE_RUNNER:-current} is not installed at $CX_ROOT ===" >> "$log" 2>&1 || true
+  exit 1
+fi
+echo "runner: $runner_name ($CX_ROOT)" >> "$log" 2>&1 || true
 
 while :; do
   case "$STEAM_COMPAT_INSTALL_PATH" in
@@ -328,6 +336,80 @@ lay_out_proton_profile() {
   fi
 }
 
+controller_ids() {
+  printf '%s\n' "$1" | tr ',' '\n' | tr 'A-F' 'a-f' \
+    | sed -n 's/^[[:space:]]*0x\([0-9a-f]\{4\}\)\/0x\([0-9a-f]\{4\}\)[[:space:]]*$/\1\/\2/p' \
+    | sort -u
+}
+
+ids_without() {
+  printf '%s\n' "$2" -- "$1" \
+    | awk '$0 == "--" { s = 1; next } !s { b[$0]; next } $0 != "" && !($0 in b)'
+}
+
+sync_controllers() {
+  winebus='HKLM\System\CurrentControlSet\Services\WineBus'
+  owned_file="$STEAM_COMPAT_DATA_PATH/steambridge-hidden-controllers"
+  hidraw_file="$STEAM_COMPAT_DATA_PATH/steambridge-disable-hidraw"
+  [ ! -L "$owned_file" ] && [ ! -L "$hidraw_file" ] || return 0
+  owned=""
+  [ ! -f "$owned_file" ] || owned=$(sed -n '/^[0-9a-f]\{4\}\/[0-9a-f]\{4\}$/p' "$owned_file" | sort -u)
+  wanted=""
+  if [ "${STEAMBRIDGE_STEAMINPUT:-1}" = "1" ]; then
+    wanted=$(ids_without "$(controller_ids "$SDL_GAMECONTROLLER_IGNORE_DEVICES")" \
+      "$(controller_ids "$SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT")")
+    wanted=$(printf '%s\n' "$wanted" 057e/2006 057e/2007 057e/2009 | sed '/^$/d' | sort -u)
+    [ "$verb" != run ] || wanted=$(printf '%s\n' "$wanted" "$owned" | sed '/^$/d' | sort -u)
+  fi
+  controllers_changed=0
+  if [ "$wanted" != "$owned" ]; then
+    present=$("$WINELOADER" reg query "$winebus\\Devices" 2>/dev/null | tr -d '\r' \
+      | tr '[:upper:]' '[:lower:]' \
+      | sed -n 's/.*\\devices\\\([0-9a-f]\{4\}\/[0-9a-f]\{4\}\)[[:space:]]*$/\1/p' | sort -u)
+    wanted=$(ids_without "$wanted" "$(ids_without "$present" "$owned")")
+    if ! { printf '%s\n%s\n' "$owned" "$wanted" | sed '/^$/d' | sort -u > "$owned_file.new" \
+        && mv -f "$owned_file.new" "$owned_file"; }; then
+      rm -f "$owned_file.new"
+      echo "=== could not track the hidden controllers, leaving them as they are ===" >> "$log" 2>&1 || true
+      return 0
+    fi
+    failed=0
+    for id in $(ids_without "$wanted" "$present"); do
+      "$WINELOADER" reg add "$winebus\\Devices\\$id" /v Hidraw /t REG_DWORD /d 0 /f >> "$log" 2>&1 || failed=1
+      controllers_changed=1
+    done
+    for id in $(ids_without "$owned" "$wanted"); do
+      "$WINELOADER" reg delete "$winebus\\Devices\\$id" /f >> "$log" 2>&1 || failed=1
+      controllers_changed=1
+    done
+    [ "$failed" = 1 ] || printf '%s\n' "$wanted" | sed '/^$/d' > "$owned_file" || true
+  fi
+  if [ "${STEAMBRIDGE_DISABLE_HIDRAW:-0}" = "1" ]; then
+    if [ ! -f "$hidraw_file" ]; then
+      if "$WINELOADER" reg query "$winebus" /v DisableHidraw 2>/dev/null | grep -qiE 'REG_DWORD[[:space:]]+0x0*1[[:space:]]*$'; then
+        echo "controllers: DisableHidraw was already set in the prefix" >> "$log" 2>&1 || true
+      elif "$WINELOADER" reg add "$winebus" /v DisableHidraw /t REG_DWORD /d 1 /f >> "$log" 2>&1; then
+        : > "$hidraw_file"
+        controllers_changed=1
+      fi
+    fi
+  elif [ -f "$hidraw_file" ]; then
+    "$WINELOADER" reg delete "$winebus" /v DisableHidraw /f >> "$log" 2>&1 || true
+    rm -f "$hidraw_file"
+    controllers_changed=1
+  fi
+  if [ "$controllers_changed" = 1 ]; then
+    "$WINESERVER" -k >> "$log" 2>&1 || true
+    "$WINESERVER" -w >> "$log" 2>&1 || true
+    start_prio_server
+  fi
+  if [ "${STEAMBRIDGE_STEAMINPUT:-1}" = "1" ]; then
+    echo "controllers: $(printf '%s\n' "$wanted" | grep -c .) kept off hidraw (changed=$controllers_changed, disable_hidraw=${STEAMBRIDGE_DISABLE_HIDRAW:-0})" >> "$log" 2>&1 || true
+  else
+    echo "controllers: Steam Input handling off (STEAMBRIDGE_STEAMINPUT=0)" >> "$log" 2>&1 || true
+  fi
+}
+
 if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
   export WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx"
   mkdir -p "$WINEPREFIX"
@@ -366,12 +448,14 @@ if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
     fi
   fi
   prio_shim="$HOME/Library/Application Support/SteamBridge/prio-shim.dylib"
-  if [ "${STEAMBRIDGE_PRIO:-0}" = "1" ] && [ -f "$prio_shim" ]; then
+  start_prio_server() {
+    [ "${STEAMBRIDGE_PRIO:-0}" = "1" ] && [ -f "$prio_shim" ] || return 0
     "$WINESERVER" -w >> "$log" 2>&1 || true
     if DYLD_INSERT_LIBRARIES="$prio_shim" "$WINESERVER" >> "$log" 2>&1; then
       echo "sched: wineserver started with prio-shim (mode ${STEAMBRIDGE_PRIO_MODE:-mr}, latency ${STEAMBRIDGE_PRIO_LATENCY:-keep}, throughput ${STEAMBRIDGE_PRIO_THROUGHPUT:-keep})" >> "$log" 2>&1 || true
     fi
-  fi
+  }
+  start_prio_server
   stage_step="profile layout"
   lay_out_proton_profile
   "$WINELOADER" wineboot --init >> "$log" 2>&1 || true
@@ -392,17 +476,21 @@ if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
 
   "$WINELOADER" reg add 'HKLM\Software\Classes\steam' /v 'URL Protocol' /t REG_SZ /d '' /f >> "$log" 2>&1 || true
   "$WINELOADER" reg add 'HKLM\Software\Classes\steam\shell\open\command' /ve /t REG_SZ /d '"C:\Program Files (x86)\Steam\steam.exe" "%1"' /f >> "$log" 2>&1 || true
+  stage_step="controllers"
+  sync_controllers
 fi
 
 bridge_src="$HOME/Library/Application Support/SteamBridge/bridge"
 prefix_steam="$WINEPREFIX/drive_c/Program Files (x86)/Steam"
 verify_runner() {
-  if [ ! -d "$bridge_src/wine" ]; then
+  bridge_wine="$bridge_src/wine-$runner_name"
+  [ -d "$bridge_wine" ] || bridge_wine="$bridge_src/wine"
+  if [ ! -d "$bridge_wine" ]; then
     echo "=== no patched ntdll in the bridge, run SteamBridge ===" >> "$log" 2>&1 || true
     return
   fi
   for arch in x86_64-windows i386-windows aarch64-windows; do
-    staged="$bridge_src/wine/$arch/ntdll.dll"
+    staged="$bridge_wine/$arch/ntdll.dll"
     live="$CX_ROOT/lib/wine/$arch/ntdll.dll"
     [ -f "$staged" ] || continue
     if [ ! -f "$live" ]; then
@@ -688,6 +776,13 @@ else
   echo "loader staging failed, game mode unavailable" >> "$log" 2>&1 || true
 fi
 
+audiobuf="$HOME/Library/Application Support/SteamBridge/audiobuf.dylib"
+if [ "${STEAMBRIDGE_AUDIOBUF:-0}" = "1" ] && [ -f "$audiobuf" ]; then
+  echo "=== audiobuf injected from $audiobuf ===" >> "$log" 2>&1 || true
+else
+  [ "${STEAMBRIDGE_AUDIOBUF:-0}" != "1" ] || echo "=== STEAMBRIDGE_AUDIOBUF=1 but $audiobuf is missing ===" >> "$log" 2>&1 || true
+  audiobuf=""
+fi
 cat > "$loader_macos/launcher" <<LAUNCHER
 #!/bin/sh
 export WINELOADER="$WINELOADER"
@@ -705,6 +800,9 @@ if [ -f "\$shim" ]; then
   export $LEGACY_OVERLAY_SHIM_ENV="\$shim"
 elif [ -n "\$STEAM_DYLD_INSERT_LIBRARIES" ]; then
   export DYLD_INSERT_LIBRARIES="\$STEAM_DYLD_INSERT_LIBRARIES"
+fi
+if [ -n "$audiobuf" ]; then
+  export DYLD_INSERT_LIBRARIES="$audiobuf\${DYLD_INSERT_LIBRARIES:+:\$DYLD_INSERT_LIBRARIES}"
 fi
 [ -n "\$STEAMBRIDGE_GAME_CWD" ] && cd "\$STEAMBRIDGE_GAME_CWD"
 "$WINELOADER" "\$@"
@@ -774,10 +872,17 @@ fi
 
 
 set -- --args "$shim_exe" "$@"
-for name in $(env | sed -nE 's/^(Steam[A-Za-z0-9]*|SikarugirApp[A-Za-z0-9]*|GST_PLUGIN_PATH|VK_DRIVER_FILES|(WINE|STEAMBRIDGE_|CX_GRAPHICS|CX_D3DMETAL|CX_APPLEGPT|CX_FWD|WINEDLLPATH_|D3DM_|DXMT_|DXVK_|MVK_|MTL_|ROSETTA_)[A-Z0-9_]*)=.*/\1/p'); do
+for name in $(env | sed -nE 's/^(Steam[A-Za-z0-9]*|SikarugirApp[A-Za-z0-9]*|GST_PLUGIN_PATH|VK_DRIVER_FILES|(WINE|STEAMBRIDGE_|CX_GRAPHICS|CX_D3DMETAL|CX_APPLEGPT|CX_FWD|WINEDLLPATH_|D3DM_|DXMT_|DXVK_|HB_AUDIO|MVK_|MTL_|ROSETTA_)[A-Z0-9_]*)=.*/\1/p'); do
   eval "value=\$$name"
   set -- --env "$name=$value" "$@"
 done
+if [ "${STEAMBRIDGE_SDL_PASSTHROUGH:-0}" = "1" ]; then
+  for name in $(env | sed -nE 's/^(SDL_[A-Za-z0-9_]*)=.*/\1/p'); do
+    eval "value=\$$name"
+    set -- --env "$name=$value" "$@"
+  done
+  echo "=== SDL_* variables passed to the game (STEAMBRIDGE_SDL_PASSTHROUGH=1) ===" >> "$log" 2>&1 || true
+fi
 set -- \
   --env CX_ROOT="$CX_ROOT" \
   --env CX_HOME="$CX_HOME" \

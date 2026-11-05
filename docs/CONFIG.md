@@ -37,6 +37,11 @@ Rules (from `dylib/feats/compat_run.sh`):
 | `STEAMBRIDGE_PRIO_MODE` | `mr` | With the shim: `mr`, `floorN` or `off` |
 | `STEAMBRIDGE_PRIO_LATENCY` | unset | With the shim: `0` or `1` sets every Windows thread to that latency QoS tier |
 | `STEAMBRIDGE_PRIO_THROUGHPUT` | unset | With the shim: `0` sets throughput QoS tier 0 |
+| `STEAMBRIDGE_RUNNER` | `current` | Runner directory under `$SB/runners`. `highball-11` uses the Highball Wine 11 (CrossOver 26.3 tree) engine, installed with `STEAMBRIDGE_INSTALL_HIGHBALL=1 scripts/setup.sh`. The prefix is updated by `wineboot` when it moves between runners; back it up first |
+| `STEAMBRIDGE_STEAMINPUT` | `1` | Hides the controllers Steam Input owns (`SDL_GAMECONTROLLER_IGNORE_DEVICES` from Steam) and Switch Pro/Joy-Cons from Wine's hidraw path (`WineBus\Devices\<vid>/<pid>` `Hidraw=0`), so the game sees one pad. `0` removes the keys SteamBridge added |
+| `STEAMBRIDGE_DISABLE_HIDRAW` | `0` | `1` sets `WineBus` `DisableHidraw=1` (a DualShock 4 seen only as DirectInput, missing rumble) |
+| `STEAMBRIDGE_SDL_PASSTHROUGH` | `0` | `1` passes Steam's `SDL_*` variables to the game. Untested; can hide the physical pad from Wine's SDL bus |
+| `STEAMBRIDGE_AUDIOBUF` | `0` | `1` inserts `$SB/audiobuf.dylib` (Highball's 5 ms audio buffer cap, float limiter, real-time audio clock, follows the Mac's output). `HB_AUDIOLIMIT=0`, `HB_AUDIORT=0`, `HB_AUDIOFOLLOW=0`, `HB_AUDIOBUF_DEBUG=1` tune it |
 | `MTL_HUD_ENABLED` | unset | `1` shows the Metal performance HUD |
 | `D3DM_ENABLE_METALFX` | `1` | D3DMetal MetalFX support |
 | `WINEDEBUG` | `err+all,fixme-all` | Wine log channels |
