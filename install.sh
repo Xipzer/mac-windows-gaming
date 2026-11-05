@@ -12,7 +12,7 @@ while [[ $# -gt 0 ]]; do
     --no-steam) NO_STEAM=1; shift;;
     --legacy-wrapper) LEGACY=1; shift;;
     --gptk-dmg) GPTK_DMG_ARG="${2:?--gptk-dmg needs a path}"; shift 2;;
-    -h|--help) sed -n '2,21p' "$0" 2>/dev/null || true; exit 0;;
+    -h|--help) printf '%s\n' "Usage: install.sh [--no-heroic] [--no-steam] [--legacy-wrapper] [setup.sh options]" "Installs prerequisites, Steam and Heroic, builds and installs SteamBridge, then applies per-game profiles."; exit 0;;
     *) SETUP_ARGS+=("$1"); shift;;
   esac
 done

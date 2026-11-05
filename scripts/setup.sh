@@ -76,7 +76,7 @@ for a in "$@"; do
   case "$a" in
     --force) FORCE=1;; --no-default) SET_DEFAULT=0;; --skip-build) SKIP_BUILD=1;;
     --uninstall) UNINSTALL=1;; --migrate) MIGRATE_ONLY=1;;
-    -h|--help) sed -n '2,21p' "$0"; exit 0;;
+    -h|--help) printf '%s\n' "Usage: setup.sh [--force] [--skip-build] [--no-default] [--migrate] [--uninstall]" "  --force       rebuild the runner and the hook library" "  --skip-build  reuse the existing build (after a Steam update)" "  --no-default  do not make SteamBridge the default for Windows games" "  --migrate     only migrate an older install to SteamBridge names" "  --uninstall   restore stock Steam.app and remove the compatibility tool"; exit 0;;
     *) die "unknown option $a";;
   esac
 done
