@@ -37,6 +37,7 @@ Hooks are working when `steambridge.log` contains `install_thread: ready, N/N ho
 | Launch seems stuck, nothing on screen | A Steam EULA or Play dialog is behind other windows | Bring Steam to the front |
 | Cloud saves missing | Old prefix with the profile named after the Mac user | Launch once; the run script merges and links the profile |
 | Mac Steam and the legacy wrapper Steam both running | A `steam://` URL opened the wrapper | Quit the wrapper. Launch with `open -b com.valvesoftware.steam "steam://rungameid/<id>"` |
+| Whole Mac freezes while a big game loads | Disk nearly full, so macOS cannot grow swap | Free disk space. A dialog asks before a launch with under 10 GB free (`STEAMBRIDGE_MIN_FREE_GB`) |
 | Slow for a day after a macOS upgrade | Spotlight reindexing | Wait |
 | Nothing Windows runs after a macOS 27 upgrade | Upgrade removed Rosetta 2 | `softwareupdate --install-rosetta --agree-to-license` |
 | Want stock Steam back | | `scripts/setup.sh --uninstall` |

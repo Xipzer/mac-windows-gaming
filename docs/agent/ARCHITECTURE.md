@@ -68,6 +68,7 @@ Environment, in load order (first set wins unless noted):
 
    Then, in this order:
    - Direct3D 8 and 9, next to any renderer: `WINEDLLPATH_D9VK=Frameworks/renderer/d9vk/wine` when the `VK_DRIVER_FILES` manifest exists and `STEAMBRIDGE_D9VK` is not `0`. Without it Direct3D 8 and 9 use wined3d over OpenGL
+   - Free disk, verb `waitforexitandrun` only: below `STEAMBRIDGE_MIN_FREE_GB` (default 10, `0` off) free on the home volume, an `osascript` dialog asks. "Not now" exits 0 before anything touches the prefix
    - DirectX redist: Steam's DirectX installscript never runs (`iscriptevaluator.exe` is skipped). Once per prefix, after Wine has built `syswow64`, unpacks the native DLLs from `*_d3dx9_*.cab` and `*_d3dcompiler_*.cab` in the game folder (depth 4) with `tar`: `_x86` cabs to `syswow64`, `_x64` cabs to `system32`. Replaces only Wine builtins or placeholders (kept as `*.steambridge-orig`), lists the DLLs in `compatdata/<appid>/steambridge-directx`, and prepends `<dll>=n,b` for each to `WINEDLLOVERRIDES`. A first launch without a prefix gets them on the next launch
    - Retina: if `STEAMBRIDGE_RETINA` is unset and the main screen's `backingScaleFactor` (`osascript -l JavaScript`) is 1, sets `STEAMBRIDGE_RETINA=0`. Wine applies one scale factor to every screen
 6. `WINEMSYNC` defaults to 1, forced to 0 for 32-bit (PE32) exes. `MTL_HUD_ENABLED` may come from `compatdata/<appid>/steambridge-hud` (written by `scripts/launch-game.sh --hud`).
