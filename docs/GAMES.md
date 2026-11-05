@@ -36,7 +36,7 @@ Epic, GOG and Amazon games follow the same rules and run through Heroic with its
 
 ## Verified games
 
-M4 Max, macOS 26.6.2. Profiles: `configs/games/<appid>.env`.
+M4 Max, macOS 26.6.2, unless noted. Profiles: `configs/games/<appid>.env`.
 
 | Game | App ID | DX | Verdict | Profile |
 |---|---|---|---|---|
@@ -44,11 +44,15 @@ M4 Max, macOS 26.6.2. Profiles: `configs/games/<appid>.env`.
 | LEGO Star Wars: The Skywalker Saga | 920210 | 11/12 | Works | D3DMetal, `WINEMSYNC=0` |
 | Sonic Frontiers | 1237320 | 11 | Works | D3DMetal, dinput8 proxy removes the 60 fps cap |
 | Dragon Ball: Sparking! ZERO | 1790600 | 12 | Works, offline only | D3DMetal, `direct-shipping.sh` launch option |
+| The Elder Scrolls V: Skyrim | 72850 | 9 | Works (M2 Pro, macOS 27.0.1) | None. 32-bit: needs the 32-bit ntdll detour and DXVK for DX9 |
+| Scribblenauts Unlimited | 218680 | 9 | Works (M2 Pro, macOS 27.0.1) | None. 32-bit: needs the 32-bit ntdll detour and the game's own `d3dx9` (unpacked on the second launch) |
+| Megabonk | 3405340 | - | Works (M2 Pro, macOS 27.0.1) | None |
+| Shape of Dreams | 2444750 | - | Works (M2 Pro, macOS 27.0.1) | None. Froze the whole Mac with about 2 GB disk free; fine with 28 GB |
 | Star Wars Jedi: Survivor | 1774580 | 12 | Blocked | EA App (`INST-14-1627`) |
 | Need for Speed Heat | 1222680 | 11 | Blocked | EA App |
 | Counter-Strike 2 | 730 | 11 | Blocked | VAC |
 
-All four working profiles also set `STEAMBRIDGE_DESKTOP_MODE=1512x982` for native 3024x1964 on a 14" MacBook Pro.
+The four M4 Max profiles also set `STEAMBRIDGE_DESKTOP_MODE=1512x982` for native 3024x1964 on a 14" MacBook Pro.
 
 ## Native ports
 

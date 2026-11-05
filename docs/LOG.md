@@ -89,6 +89,21 @@ Profiling (xctrace, Metal System Trace): at native every game is GPU-bound (94-1
 - Spotlight reindexes after the upgrade and lowers performance for about a day.
 - Minor updates are held until verified.
 
+### 8. 32-bit and DirectX 9 games (Nov 2026)
+
+Contributed by Diego Colombo, tested on an M2 Pro with macOS 27.0.1.
+
+| Finding | Fix |
+|---|---|
+| Vulkan ICD manifests copied to `<runner>/vulkan`, where `library_path` `../../../Frameworks` does not resolve. No Vulkan driver ever loaded | Manifests live in `<runner>/Resources/vulkan`; setup moves old ones |
+| DX8/9 ran on wined3d over OpenGL | `WINEDLLPATH_D9VK` (DXVK) when the Vulkan driver is present; `STEAMBRIDGE_D9VK=0` opts out |
+| 32-bit games never reached lsteamclient: Wine 11's i386 `build_module` gates on `0x1`, and the detour did not fit in `.text` padding | i386 ntdll patched too, payload in the `.rsrc` tail |
+| Wine scales every screen by one factor, so Retina on a 1x monitor doubled the size | Retina off by default when the main screen is 1x |
+| Steam's DirectX installscript never runs; Scribblenauts Unlimited crashes on Wine's `d3dx9` | Native `d3dx9`/`d3dcompiler` unpacked from the game's redist cabs |
+| Shape of Dreams froze the whole Mac with about 2 GB free (no room for swap) | Dialog before a launch with under 10 GB free |
+
+Skyrim, Scribblenauts Unlimited, Megabonk and Shape of Dreams play.
+
 ## Final profiles (`configs/games/<appid>.env`)
 
 | Game | Renderer | Sync | Other | Resolution | Result |
