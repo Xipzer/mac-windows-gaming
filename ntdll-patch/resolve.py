@@ -13,6 +13,12 @@ PINNED = {
          'payload': '4ce2ddc11c433fe15f78633fc5c1fda8b27fa642426cb26378f7d7d7b54a79f8',
          'exports': {'LdrGetDllHandle': 0x1700176d0, 'LdrLoadDll': 0x1700181f0,
                      'NtProtectVirtualMemory': 0x17000f640}},
+    '4dbe6a8b3e7ee1c1e7f593befd14e01913199da833dd699da966be2026daae2a':
+        {'hookRVA': 0x485f3, 'stolen': '4883bc24f000000000', 'caveRVA': 0x7a3e0, 'wm': 'r15',
+         'resume': 0x485fc, 'load_path': 0xd0,
+         'payload': '3c641518f1fef6a711bce103e63cbfb4c342c25f3d0651c35d98202dd9fa01f2',
+         'exports': {'LdrGetDllHandle': 0x170014fe0, 'LdrLoadDll': 0x170015b50,
+                     'NtProtectVirtualMemory': 0x17000f380}},
     '94cc7c14c1e9dcf58ef501015c115f8405c73b2a65cefe31faa5d9e47f36e58b':
         {'hookRVA': 0x4d828, 'stolen': 'f645bc027526', 'caveRVA': 0x7c830, 'caveSize': 2000,
          'resume': 0x4d82e, 'wm': 'edi', 'load_path': -0x54,
